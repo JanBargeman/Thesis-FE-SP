@@ -48,12 +48,14 @@ dataset = dataset.iloc[0:2000,:]
 
 #%% general functions
 
-def computeFeat(data, featType):
+def computeFeat(data, featType, ft_nfeat, wt_depth):
     "channels the 'featType' such that desired features are computed"    
     if featType == "SP":
-        features = computeSP(data)
+        features = computeSP(data, ft_nfeat, wt_depth)
     elif featType == "basic":
-        features = computeBasic(data)   
+        features = computeBasic(data)          
+    elif featType == "SPonlyFT":
+        features = computeSPonlyFT(data, ft_nfeat)
     return features
 
 def combineDays(data):
@@ -61,25 +63,30 @@ def combineDays(data):
     date = data.date[0]
     account_id = data.account_id[0]
     amount = data.amount.sum()
-    balance = data.balance[0]
+    balance = data.balance.iloc[-1]
     status = str(data.status[0])
     day_new = pd.DataFrame([[date,account_id,amount,balance,status]], columns=['date','account_id','amount','balance','status'])  
     return day_new
 
 def fillBalTran(data, startDate, endDate, fillBalMeth, hours = 24):
     "fill the dataset with respective values"
-    dates = pd.DataFrame(pd.date_range(startDate, endDate, freq='D', name="date"))
+    dates = pd.DataFrame(pd.date_range(startDate, endDate, freq='D', name="date"))    
     data_new = dates.merge(data, on="date", how="inner")
+    
+    # combine leap-year-day (29 feb) with 28 feb
+    data_new.date[data_new.date.astype(str).str.endswith('02-29')] = data_new.date[data_new.date.astype(str).str.endswith('02-29')]-pd.Timedelta(days=1)
+    # combine multiple transactions that occur on same day
     data_new = data_new.groupby(data_new.date.dt.to_period('D')).apply(combineDays).reset_index(drop=True)
-  
+
+    dates = dates[~dates.date.astype(str).str.endswith('02-29')]    # drop 29th of feb
     data_new = dates.merge(data_new, on="date", how="outer")    
-    data_new.balance = data_new.balance.fillna(method='ffill') # balance is forwardfilled 
-    if fillBalMeth == 'bfill':# and afterwards depends on whether its complete observation length
+    
+    # fillna the dataframe
+    data_new.balance = data_new.balance.fillna(method='ffill')  # balance is forwardfilled 
+    if fillBalMeth == 'bfill':  # and afterwards depends on whether it's complete observation length
         data_new.balance = data_new.balance.fillna(method='bfill') 
     elif fillBalMeth == 0:
-        data_new.balance = data_new.balance.fillna(0) 
-    else:
-        print("fillBalance going wrong")
+        data_new.balance = data_new.balance.fillna(0)
     data_new.amount = data_new.amount.fillna(0) # amount is filled with 0's
     data_new.account_id = data_new.account_id.fillna(int(data_new.account_id.mean())) # account_id with account_id
     data_new.status = data_new.status.fillna(method='ffill') # status is forwardfilled
@@ -88,18 +95,18 @@ def fillBalTran(data, startDate, endDate, fillBalMeth, hours = 24):
 
 #%% compute features on specific time basis
     
-def monthly(dataset, featType, obsLen = 12):
+def monthly(dataset, featType, obsLen = 12, ft_nfeat = 10, wt_depth = 3):
     "grabs 'obsLen' months of the data, fills it and computes 'featType' features per month"
     firstDate = dataset.date.iloc[0]
     lastDate = dataset.date.iloc[-1]
     if firstDate < lastDate - relativedelta(months = obsLen):
         startDate = lastDate.to_period('M').to_timestamp() - relativedelta(months = obsLen-1) #dropping first month of year due to varying month lengths
-        endDate = lastDate.to_period('M').to_timestamp()
+        endDate = lastDate.to_period('M').to_timestamp() + relativedelta(months=1) - relativedelta(days=1)
         fillBalMeth = 'bfill'
     else:
         print("not full obs length:", dataset.account_id.iloc[0])
         startDate = firstDate.to_period('M').to_timestamp() + relativedelta(months=1) #dropping first month of year due to varying month lengths
-        endDate = lastDate.to_period('M').to_timestamp()
+        endDate = lastDate.to_period('M').to_timestamp() + relativedelta(months=1) - relativedelta(days=1)
         fillBalMeth = 0
     
     # select only start_date <-> end_date for later use groupby
@@ -107,25 +114,27 @@ def monthly(dataset, featType, obsLen = 12):
     dataset = fillBalTran(dataset, startDate, endDate, fillBalMeth)
 
     monthlyFeatures = pd.DataFrame()
-    for month in range(0, obsLen-1):
+    for month in range(0, obsLen):
         dataMonth = dataset[(dataset.date >= startDate + relativedelta(months=month)) & (dataset.date < startDate + relativedelta(months=month+1))]
-        features = pd.DataFrame(computeFeat(dataMonth, featType)).T
+        features = pd.DataFrame(computeFeat(dataMonth, featType, ft_nfeat, wt_depth)).T
         monthlyFeatures = pd.concat([monthlyFeatures,features], axis = 1)        
-        
+    
+    monthlyFeatures.columns = np.arange(len(monthlyFeatures.columns))    
+    
     return monthlyFeatures
 
-def yearly(dataset, featType, obsLen = 2):
+def yearly(dataset, featType, obsLen = 2, ft_nfeat = 20, wt_depth = 6):
     "grabs 'obsLen' years of the data, fills it and computes 'featType' features per year"
     firstDate = dataset.date.iloc[0]
     lastDate = dataset.date.iloc[-1]
     if firstDate < lastDate - relativedelta(years = obsLen):
         startDate = lastDate.to_period('M').to_timestamp() - relativedelta(years = obsLen) #dropping first month of year due to varying month lengths
-        endDate = (lastDate.to_period('M')).to_timestamp()
+        endDate = (lastDate.to_period('M')).to_timestamp() + relativedelta(years=1) - relativedelta(days=1)
         fillBalMeth = 'bfill'
     else:
         print("suggested monthly:", dataset.account_id.iloc[0])
         startDate = firstDate.to_period('M').to_timestamp() + relativedelta(months=1) #dropping first month of year due to varying month lengths
-        endDate = (lastDate.to_period('M')).to_timestamp()
+        endDate = (lastDate.to_period('M')).to_timestamp() + relativedelta(years=1) - relativedelta(days=1)
         fillBalMeth = 0
     
     # select only start_date <-> end_date for later use groupby
@@ -133,14 +142,14 @@ def yearly(dataset, featType, obsLen = 2):
     dataset = fillBalTran(dataset, startDate, endDate, fillBalMeth)
  
     yearlyFeatures = pd.DataFrame()
-    for year in range(0, obsLen-1):
+    for year in range(0, obsLen):
         dataYear = dataset[(dataset.date >= startDate + relativedelta(years=year)) & (dataset.date < startDate + relativedelta(years=year+1))]       
-        features = pd.DataFrame(computeFeat(dataYear, featType)).T
+        features = pd.DataFrame(computeFeat(dataYear, featType, ft_nfeat, wt_depth)).T
         yearlyFeatures = pd.concat([yearlyFeatures,features], axis = 1)    
 
     return yearlyFeatures
 
-def overall(dataset, featType):
+def overall(dataset, featType, ft_nfeat = 20, wt_depth = 6):
     "grabs the entire dataset, fills it and computes 'featType' features over the entire length"
     firstDate = dataset.date.iloc[0]
     lastDate = dataset.date.iloc[-1]
@@ -150,7 +159,7 @@ def overall(dataset, featType):
     
     datasetOverall = fillBalTran(dataset, startDate, endDate, fillBalMeth)
  
-    overallFeatures = pd.DataFrame(computeFeat(datasetOverall, featType)).T
+    overallFeatures = pd.DataFrame(computeFeat(datasetOverall, featType, ft_nfeat, wt_depth)).T
 
     return overallFeatures
 
@@ -177,24 +186,32 @@ def computeBasicFeat(data):
 
 #%% feature engineering (SP)
 
-def computeSP(data):
-    "compute signal processing features"
-    fourierAmount = computeFourier(data['amount'])
-    fourierBalance = computeFourier(data['balance'])
+def computeSP(data, ft_nfeat, wt_depth):
+    "compute signal processing features, FT and WT"
+    fourierAmount = computeFourier(data['amount'], ft_nfeat)
+    fourierBalance = computeFourier(data['balance'], ft_nfeat)
     
-    # waveletAmount = computeWavelet(data['amount'])
-    # waveletBalance = computeWavelet(data['balance'])
-    # features = [*fourierAmount, *fourierBalance, *waveletAmount, *waveletBalance]   
+    # features = [*fourierAmount, *fourierBalance]
     
+    waveletAmount = computeWavelet(data['amount'], wt_depth)
+    waveletBalance = computeWavelet(data['balance'], wt_depth)
+    features = [*fourierAmount, *fourierBalance, *waveletAmount, *waveletBalance]   
+    
+    return features
+
+def computeSPonlyFT(data, ft_nfeat):
+    "compute signal processing features, FT only"
+    fourierAmount = computeFourier(data['amount'], ft_nfeat)
+    fourierBalance = computeFourier(data['balance'], ft_nfeat)
     features = [*fourierAmount, *fourierBalance]
     return features
 
-def computeFourier(data):
+def computeFourier(data, ft_nfeat):
     "compute fourier transform of data and return 10 largest frequencies and amounts"
     fft = scipy.fft.fft(data.values)
     fft_abs = abs(fft[range(int(len(data)/2))])
         
-    largestIndexes = np.argsort(-fft_abs)[:10]
+    largestIndexes = np.argsort(-fft_abs)[:ft_nfeat]
     largestValues = fft_abs[largestIndexes]
     largestValues = [int(a) for a in largestValues]
     
@@ -202,12 +219,14 @@ def computeFourier(data):
     features = [item for sublist in features for item in sublist]   # flatten list      
     return features
 
-def computeWavelet(data):
-    "Under Construction : compute wavelet transform of data and return ..."
-    wavelet = pywt.wavedec(data, 'db2', level=1)
+def computeWavelet(data, depth):
+    "compute wavelet transform of data and return detail coefficients at each decomposition level"
+    wavelet = pywt.wavedec(data, 'db2', level=int(depth))
     features = [item for sublist in wavelet for item in sublist]   # flatten list      
-
     return features
+
+# def computeWaveletB(data, depth):
+    
 
 #%% filters, denoisers
 
@@ -227,6 +246,48 @@ def waveletDenoise(data, thresh = 0.63, wavelet='db2'):
 # axis[0].plot(data.date, test.amount)
 # axis[1].plot(data.date, data.amount)
 
+#%% WAVELET TEST
+
+# datatest = dataset[dataset.account_id==1787]
+# firstDate = datatest.date.iloc[0]
+# lastDate = datatest.date.iloc[-1]
+# startDate = firstDate.to_period('M').to_timestamp()    
+# endDate = lastDate.to_period('M').to_timestamp()
+# fillBalMeth = 0
+# datatest = fillBalTran(datatest, startDate, endDate, fillBalMeth)
+
+# month = 30
+# dataMonth = datatest[(datatest.date >= startDate + relativedelta(months=month)) & (datatest.date < startDate + relativedelta(months=month+1))]
+
+
+# #%%
+
+# data_for_analysis = dataMonth.amount
+# cA, cD = pywt.dwt(data_for_analysis, 'db2') #max_level = 9 voor 2000 obs, 3 voor 1 maand (30)
+# # cA = approximation coeff --> lowpass filter
+# # cD = detail coeff --> highpass filter
+
+
+# pywt.dwt_max_level(365,"db2")
+
+# a_list_of_coefs = pywt.wavedec(data_for_analysis,'db2',level=3)
+
+# (datas,coeffs) = pywt.dwt(data_for_analysis, 'db2')
+
+# wtrec = pywt.idwt(cA, cD, 'db2')
+
+# #%%
+# figure, axis = plotter.subplots(2, 1)
+# plotter.subplots_adjust(hspace=1)
+
+# axis[0].plot(datatest.date, datatest.amount)
+# axis[1].plot(datatest.date, wtrec)
+
+
+
+
+
+
 #%% MAIN
 
 current = timeit.default_timer()
@@ -236,7 +297,7 @@ print(timeit.default_timer() - current)     # 2 min
 current = timeit.default_timer()
 
 monthlyFeaturesSP = dataset.groupby("account_id").apply(monthly, featType="SP", obsLen=12).reset_index(level=1,drop=True)
-print(timeit.default_timer() - current)     # 2 min
+print(timeit.default_timer() - current)     # 2 min // +WT 
 current = timeit.default_timer()
 
 yearlyFeaturesB = dataset.groupby("account_id").apply(yearly, featType="basic", obsLen=2).reset_index(level=1,drop=True)
@@ -244,15 +305,15 @@ print(timeit.default_timer() - current)     # 3 min
 current = timeit.default_timer()
 
 yearlyFeaturesSP = dataset.groupby("account_id").apply(yearly, featType="SP", obsLen=2).reset_index(level=1,drop=True)
-print(timeit.default_timer() - current)     # 3.5 min
+print(timeit.default_timer() - current)     # 3.5 min // +WT 
 current = timeit.default_timer()
 
 overallFeaturesB = dataset.groupby("account_id").apply(overall, featType="basic").reset_index(level=1,drop=True)
 print(timeit.default_timer() - current)     # 5 min
 current = timeit.default_timer()
 
-overallFeaturesSP = dataset.groupby("account_id").apply(overall, featType="SP").reset_index(level=1,drop=True)
-print(timeit.default_timer() - current)     # 5 min
+overallFeaturesSP = dataset.groupby("account_id").apply(overall, featType="SPonlyFT").reset_index(level=1,drop=True)
+print(timeit.default_timer() - current)     # 5 min // +WT 
 current = timeit.default_timer()
     
 #%%     Writing all files to a 0results folder (if it doesn't exist, manually create please)
@@ -333,17 +394,17 @@ print("acc:", accuracy_score(y_valid_SP, clf_SP.predict(X_valid_SP)))
 #%%
 # problems:
 
-# verschillende lengtes van observaties, dus 4 maanden of 12 maanden
-# als een maand maar 1 observatie heeft, std/krt/skw = NAN
-
+#   verschillende lengtes van observaties, dus 4 maanden of 12 maanden
+#   in monthly komen soms verschillende maanden bij elkaar in de monthlyfeaturesSP kolom
 
 # TODO:
 #   WT
-#   dummy voor waar je in het jaar/maand bent
+#   columnnames
+#   ? dummy voor waar je in het jaar/maand bent
 #   fft power spectrum?
 #   wavelet verschillende dieptes en dan reconstrueren en dan daar min/max etc 
 #   computational complexity scaling (On^2?)
-#   smaller functions + docstrings + some comments
+#   smaller functions + some comments
 #   try logistic regression/ligthGBMregressorclassfiier
 
 
