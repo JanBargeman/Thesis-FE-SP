@@ -41,21 +41,29 @@ dataset = dataset[["account_id", "date", "amount", "balance", "status"]]
 dataset_orig = dataset.copy()
 
 #%% make test dataset
-dataset = dataset.iloc[0:2000,:]
+# dataset = dataset.iloc[0:2000,:]
 # dataset = dataset[dataset.account_id == 1787]
-# dataset = dataset[dataset.account_id == 1801]
+dataset = dataset[dataset.account_id == 276]
 
 
 #%% general functions
 
 def computeFeat(data, featType, ft_nfeat, wt_depth):
     "channels the 'featType' such that desired features are computed"    
-    if featType == "SP":
-        features = computeSP(data, ft_nfeat, wt_depth)
-    elif featType == "basic":
+    if featType == "SP_all": 
+        features = computeSP_all(data, ft_nfeat, wt_depth)
+    elif featType == "basic": 
         features = computeBasic(data)          
-    elif featType == "SPonlyFT":
-        features = computeSPonlyFT(data, ft_nfeat)
+    elif featType == "SP_FT": 
+        features = computeSP_FT(data, ft_nfeat)
+    elif featType == "SP_WT1": 
+        features = computeSP_WT1(data, wt_depth)
+    elif featType == "SP_WT2": 
+        features = computeSP_WT2(data, wt_depth)
+    elif featType == "SP_FTWT2": 
+        features = computeSP_FTWT2(data, ft_nfeat, wt_depth)  
+    else:
+        raise ValueError('featType must contain one of "FT", "WT1", "WT2", or "SP_all" or "basic"')
     return features
 
 def combineDays(data):
@@ -132,8 +140,8 @@ def yearly(dataset, featType, obsLen = 2, ft_nfeat = 20, wt_depth = 6):
         endDate = (lastDate.to_period('M')).to_timestamp() + relativedelta(years=1) - relativedelta(days=1)
         fillBalMeth = 'bfill'
     else:
-        print("suggested monthly:", dataset.account_id.iloc[0])
-        startDate = firstDate.to_period('M').to_timestamp() + relativedelta(months=1) #dropping first month of year due to varying month lengths
+        # print("suggested monthly:", dataset.account_id.iloc[0])
+        startDate = firstDate.to_period('M').to_timestamp()
         endDate = (lastDate.to_period('M')).to_timestamp() + relativedelta(years=1) - relativedelta(days=1)
         fillBalMeth = 0
     
@@ -174,36 +182,51 @@ def computeBasic(data):
 
 def computeBasicFeat(data):  
     "compute basic features of input data: min max avg skw krt std"
-    fmin = data.min()
-    fmax = data.max()
-    favg = data.mean()
-    fskw = data.skew()
-    fkrt = data.kurt()
-    fstd = data.std()
     # fsum = dataMonth.amount.sum()    
-    features = [fmin, fmax, favg, fskw, fkrt, fstd]   
+    features = [data.min(), data.max(), data.mean(), data.skew(), data.kurt(), data.std()]   
     return features
 
 #%% feature engineering (SP)
 
-def computeSP(data, ft_nfeat, wt_depth):
-    "compute signal processing features, FT and WT"
+def computeSP_all(data, ft_nfeat, wt_depth):
+    "compute signal processing features, FT, WT1 and WT2"
     fourierAmount = computeFourier(data['amount'], ft_nfeat)
-    fourierBalance = computeFourier(data['balance'], ft_nfeat)
-    
-    # features = [*fourierAmount, *fourierBalance]
-    
+    fourierBalance = computeFourier(data['balance'], ft_nfeat)    
     waveletAmount = computeWavelet(data['amount'], wt_depth)
     waveletBalance = computeWavelet(data['balance'], wt_depth)
-    features = [*fourierAmount, *fourierBalance, *waveletAmount, *waveletBalance]   
-    
+    waveletAmountB = computeWaveletB(data['amount'], wt_depth)
+    waveletBalanceB = computeWaveletB(data['balance'], wt_depth)
+    features = [*fourierAmount, *fourierBalance, *waveletAmount, *waveletBalance, *waveletAmountB, *waveletBalanceB]   
     return features
 
-def computeSPonlyFT(data, ft_nfeat):
-    "compute signal processing features, FT only"
+def computeSP_FT(data, ft_nfeat):
+    "compute signal processing features, FT"
     fourierAmount = computeFourier(data['amount'], ft_nfeat)
     fourierBalance = computeFourier(data['balance'], ft_nfeat)
     features = [*fourierAmount, *fourierBalance]
+    return features
+
+def computeSP_FTWT2(data, ft_nfeat, wt_depth):
+    "compute signal processing features, FT and WT2"
+    fourierAmount = computeFourier(data['amount'], ft_nfeat)
+    fourierBalance = computeFourier(data['balance'], ft_nfeat)
+    waveletAmountB = computeWaveletB(data['amount'], wt_depth)
+    waveletBalanceB = computeWaveletB(data['balance'], wt_depth)
+    features = [*fourierAmount, *fourierBalance, *waveletAmountB, *waveletBalanceB]   
+    return features
+
+def computeSP_WT1(data, wt_depth):
+    "compute signal processing features, WT1"
+    waveletAmount = computeWavelet(data['amount'], wt_depth)
+    waveletBalance = computeWavelet(data['balance'], wt_depth)
+    features = [*waveletAmount, *waveletBalance]   
+    return features
+
+def computeSP_WT2(data, wt_depth):
+    "compute signal processing features, WT2"
+    waveletAmountB = computeWaveletB(data['amount'], wt_depth)
+    waveletBalanceB = computeWaveletB(data['balance'], wt_depth)
+    features = [*waveletAmountB, *waveletBalanceB]   
     return features
 
 def computeFourier(data, ft_nfeat):
@@ -221,11 +244,18 @@ def computeFourier(data, ft_nfeat):
 
 def computeWavelet(data, depth):
     "compute wavelet transform of data and return detail coefficients at each decomposition level"
-    wavelet = pywt.wavedec(data, 'db2', level=int(depth))
+    wavelet = pywt.wavedec(data, 'db2', level=depth)
     features = [item for sublist in wavelet for item in sublist]   # flatten list      
     return features
 
-# def computeWaveletB(data, depth):
+def computeWaveletB(data, depth):
+    features = []
+    for i in range(depth-1):
+        data, coeffs = pywt.dwt(data, 'db2')
+        featuresAtDepth = computeBasicFeat(pd.Series(data))
+        features = [*features, *featuresAtDepth]     
+    return features
+
     
 
 #%% filters, denoisers
@@ -246,46 +276,10 @@ def waveletDenoise(data, thresh = 0.63, wavelet='db2'):
 # axis[0].plot(data.date, test.amount)
 # axis[1].plot(data.date, data.amount)
 
-#%% WAVELET TEST
 
-# datatest = dataset[dataset.account_id==1787]
-# firstDate = datatest.date.iloc[0]
-# lastDate = datatest.date.iloc[-1]
-# startDate = firstDate.to_period('M').to_timestamp()    
-# endDate = lastDate.to_period('M').to_timestamp()
-# fillBalMeth = 0
-# datatest = fillBalTran(datatest, startDate, endDate, fillBalMeth)
-
-# month = 30
-# dataMonth = datatest[(datatest.date >= startDate + relativedelta(months=month)) & (datatest.date < startDate + relativedelta(months=month+1))]
-
-
-# #%%
-
-# data_for_analysis = dataMonth.amount
-# cA, cD = pywt.dwt(data_for_analysis, 'db2') #max_level = 9 voor 2000 obs, 3 voor 1 maand (30)
-# # cA = approximation coeff --> lowpass filter
-# # cD = detail coeff --> highpass filter
-
-
-# pywt.dwt_max_level(365,"db2")
-
-# a_list_of_coefs = pywt.wavedec(data_for_analysis,'db2',level=3)
-
-# (datas,coeffs) = pywt.dwt(data_for_analysis, 'db2')
-
-# wtrec = pywt.idwt(cA, cD, 'db2')
-
-# #%%
-# figure, axis = plotter.subplots(2, 1)
-# plotter.subplots_adjust(hspace=1)
-
-# axis[0].plot(datatest.date, datatest.amount)
-# axis[1].plot(datatest.date, wtrec)
-
-
-
-
+def countna(listofdfs):
+    for item in listofdfs:
+        print(item.isna().sum().sum())
 
 
 #%% MAIN
@@ -296,25 +290,27 @@ monthlyFeaturesB = dataset.groupby("account_id").apply(monthly, featType="basic"
 print(timeit.default_timer() - current)     # 2 min
 current = timeit.default_timer()
 
-monthlyFeaturesSP = dataset.groupby("account_id").apply(monthly, featType="SP", obsLen=12).reset_index(level=1,drop=True)
-print(timeit.default_timer() - current)     # 2 min // +WT 
+monthlyFeaturesSP = dataset.groupby("account_id").apply(monthly, featType="SP_all", obsLen=12).reset_index(level=1,drop=True)
+print(timeit.default_timer() - current)     # FT 2 min // +WT1   // +WT2 2.5 min
 current = timeit.default_timer()
 
 yearlyFeaturesB = dataset.groupby("account_id").apply(yearly, featType="basic", obsLen=2).reset_index(level=1,drop=True)
 print(timeit.default_timer() - current)     # 3 min
 current = timeit.default_timer()
 
-yearlyFeaturesSP = dataset.groupby("account_id").apply(yearly, featType="SP", obsLen=2).reset_index(level=1,drop=True)
-print(timeit.default_timer() - current)     # 3.5 min // +WT 
+yearlyFeaturesSP = dataset.groupby("account_id").apply(yearly, featType="SP_all", obsLen=2).reset_index(level=1,drop=True)
+print(timeit.default_timer() - current)     # FT 3.5 min // +WT1   // +WT2 3.5
 current = timeit.default_timer()
 
 overallFeaturesB = dataset.groupby("account_id").apply(overall, featType="basic").reset_index(level=1,drop=True)
 print(timeit.default_timer() - current)     # 5 min
 current = timeit.default_timer()
 
-overallFeaturesSP = dataset.groupby("account_id").apply(overall, featType="SPonlyFT").reset_index(level=1,drop=True)
-print(timeit.default_timer() - current)     # 5 min // +WT 
+overallFeaturesSP = dataset.groupby("account_id").apply(overall, featType="SP_FTWT2").reset_index(level=1,drop=True)
+print(timeit.default_timer() - current)     # FT 5 min // +WT1 0   // +WT2
 current = timeit.default_timer()
+
+countna([monthlyFeaturesB, monthlyFeaturesSP, yearlyFeaturesB, yearlyFeaturesSP, overallFeaturesB, overallFeaturesSP])
     
 #%%     Writing all files to a 0results folder (if it doesn't exist, manually create please)
 
@@ -368,19 +364,20 @@ X_train_SP, X_valid_SP, y_train_SP, y_valid_SP = train_test_split(X_SP,Y_SP , te
 #%% train models
 
 n_trees = 300
+max_depth = None
 
-clf_all = RandomForestClassifier(n_estimators=n_trees)
+clf_all = RandomForestClassifier(n_estimators=n_trees, max_depth=max_depth)
 clf_all.fit(X_train_all, y_train_all)
 print("\nall:\n", confusion_matrix(y_valid_all, clf_all.predict(X_valid_all)))
 print("acc:", accuracy_score(y_valid_all, clf_all.predict(X_valid_all)))
 
-clf_B = RandomForestClassifier(n_estimators=n_trees)
+clf_B = RandomForestClassifier(n_estimators=n_trees, max_depth=max_depth)
 clf_B.fit(X_train_B, y_train_B)
 print("\nB:\n", confusion_matrix(y_valid_B, clf_B.predict(X_valid_B)))
 print("acc:", accuracy_score(y_valid_B, clf_B.predict(X_valid_B)))
 
 
-clf_SP = RandomForestClassifier(n_estimators=n_trees)
+clf_SP = RandomForestClassifier(n_estimators=n_trees, max_depth=max_depth)
 clf_SP.fit(X_train_SP, y_train_SP)
 print("\nSP:\n", confusion_matrix(y_valid_SP, clf_SP.predict(X_valid_SP)))
 print("acc:", accuracy_score(y_valid_SP, clf_SP.predict(X_valid_SP)))
@@ -398,11 +395,8 @@ print("acc:", accuracy_score(y_valid_SP, clf_SP.predict(X_valid_SP)))
 #   in monthly komen soms verschillende maanden bij elkaar in de monthlyfeaturesSP kolom
 
 # TODO:
-#   WT
 #   columnnames
-#   ? dummy voor waar je in het jaar/maand bent
 #   fft power spectrum?
-#   wavelet verschillende dieptes en dan reconstrueren en dan daar min/max etc 
 #   computational complexity scaling (On^2?)
 #   smaller functions + some comments
 #   try logistic regression/ligthGBMregressorclassfiier
@@ -441,6 +435,44 @@ print(pywt.idwt(cA, cD, 'db2'))
 cA, cD = pywt.wavedec(x, 'db2', level=4)
 
 
+
+
+#%% WAVELET TEST
+
+# datatest = dataset[dataset.account_id==1787]
+# firstDate = datatest.date.iloc[0]
+# lastDate = datatest.date.iloc[-1]
+# startDate = firstDate.to_period('M').to_timestamp()    
+# endDate = lastDate.to_period('M').to_timestamp()
+# fillBalMeth = 0
+# datatest = fillBalTran(datatest, startDate, endDate, fillBalMeth)
+
+# month = 30
+# dataMonth = datatest[(datatest.date >= startDate + relativedelta(months=month)) & (datatest.date < startDate + relativedelta(months=month+1))]
+
+
+# #%%
+
+# data_for_analysis = dataMonth.amount
+# cA, cD = pywt.dwt(data_for_analysis, 'db2') #max_level = 9 voor 2000 obs, 3 voor 1 maand (30)
+# # cA = approximation coeff --> lowpass filter
+# # cD = detail coeff --> highpass filter
+
+
+# pywt.dwt_max_level(365,"db2")
+
+# a_list_of_coefs = pywt.wavedec(data_for_analysis,'db2',level=3)
+
+# (datas,coeffs) = pywt.dwt(data_for_analysis, 'db2')
+
+# wtrec = pywt.idwt(cA, cD, 'db2')
+
+# #%%
+# figure, axis = plotter.subplots(2, 1)
+# plotter.subplots_adjust(hspace=1)
+
+# axis[0].plot(datatest.date, datatest.amount)
+# axis[1].plot(datatest.date, wtrec)
 
 
 
