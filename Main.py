@@ -48,7 +48,8 @@ dataset = dataset.iloc[0:2000,:]
 
 #%% general functions
 
-def computeFeat(data, featType):    
+def computeFeat(data, featType):
+    "channels the 'featType' such that desired features are computed"    
     if featType == "SP":
         features = computeSP(data)
     elif featType == "basic":
@@ -88,6 +89,7 @@ def fillBalTran(data, startDate, endDate, fillBalMeth, hours = 24):
 #%% compute features on specific time basis
     
 def monthly(dataset, featType, obsLen = 12):
+    "grabs 'obsLen' months of the data, fills it and computes 'featType' features per month"
     firstDate = dataset.date.iloc[0]
     lastDate = dataset.date.iloc[-1]
     if firstDate < lastDate - relativedelta(months = obsLen):
@@ -113,6 +115,7 @@ def monthly(dataset, featType, obsLen = 12):
     return monthlyFeatures
 
 def yearly(dataset, featType, obsLen = 2):
+    "grabs 'obsLen' years of the data, fills it and computes 'featType' features per year"
     firstDate = dataset.date.iloc[0]
     lastDate = dataset.date.iloc[-1]
     if firstDate < lastDate - relativedelta(years = obsLen):
@@ -138,6 +141,7 @@ def yearly(dataset, featType, obsLen = 2):
     return yearlyFeatures
 
 def overall(dataset, featType):
+    "grabs the entire dataset, fills it and computes 'featType' features over the entire length"
     firstDate = dataset.date.iloc[0]
     lastDate = dataset.date.iloc[-1]
     startDate = firstDate.to_period('M').to_timestamp()    
@@ -153,12 +157,14 @@ def overall(dataset, featType):
 #%% feature engineering (basic)
 
 def computeBasic(data):
+    "computes the basic features for the 'amount' column and 'balakce' column"
     featuresAmount = computeBasicFeat(data['amount'])
     featuresBalance = computeBasicFeat(data['balance'])
     features = [*featuresAmount, *featuresBalance]
     return features
 
-def computeBasicFeat(data):   
+def computeBasicFeat(data):  
+    "compute basic features of input data: min max avg skw krt std"
     fmin = data.min()
     fmax = data.max()
     favg = data.mean()
@@ -197,7 +203,7 @@ def computeFourier(data):
     return features
 
 def computeWavelet(data):
-    
+    "Under Construction : compute wavelet transform of data and return ..."
     wavelet = pywt.wavedec(data, 'db2', level=1)
     features = [item for sublist in wavelet for item in sublist]   # flatten list      
 
