@@ -1,41 +1,34 @@
-import os
 import pandas as pd
 from dateutil.relativedelta import relativedelta
-import timeit
-import scipy.signal  # .stft #.argrelmax  for finding max in plots or smth
-import scipy.fft
-import numpy as np
-import matplotlib.pyplot as plt
-import pywt
-from functools import reduce
-from sklearn.model_selection import train_test_split
-
-from sklearn.ensemble import RandomForestClassifier
-
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import roc_auc_score
-
-from sklearn import decomposition
-
-os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 #%%
 
-dataset = pd.read_csv("personal/data/dataset.csv")
-dataset.date = pd.to_datetime(dataset.date, format="%y%m%d")
+# dataset = pd.read_csv("personal/data/dataset.csv")
+# dataset.date = pd.to_datetime(dataset.date, format="%y%m%d")
 
-dataset_orig = dataset.copy()
+# dataset_orig = dataset.copy()
 
-#%% make test dataset
-dataset = dataset.iloc[0:2000,:]
-data_acc = dataset[dataset.account_id == 1787]
-data_used = data_acc[["date","balance"]]
-# dataset = dataset[dataset.account_id == 276]
-# dataset = dataset[dataset.account_id == 1843]
+# #%% make test dataset
+# dataset = dataset.iloc[0:2000,:]
+# data_acc = dataset[dataset.account_id == 1787]
+# data_used = data_acc[["date","balance"]]
+# # dataset = dataset[dataset.account_id == 276]
+# # dataset = dataset[dataset.account_id == 1843]
 
 #%%
-def determine_observation_period_monthly(data_date, observation_length):  
+def determine_observation_period_monthly(data_date, observation_length):
+    """
+    This function determines the desired start and end date for the monthly analysis.
+
+    Args:
+        data_date (pd.DataFrame) :  dates on which actions occur in datetime format.
+        observation_length (int) : amount of recent months you want for the analysis.
+
+    Returns:
+        start_date (timestamp) : start date for the analysis.
+        end_date (timestamp) : end date for the analysis.
+
+    """
     first_date = data_date.iloc[0]
     last_date = data_date.iloc[-1]
     if first_date < last_date - relativedelta(months=observation_length):
@@ -51,7 +44,19 @@ def determine_observation_period_monthly(data_date, observation_length):
     return start_date, end_date
 
 
-def determine_observation_period_yearly(data_date, observation_length):  
+def determine_observation_period_yearly(data_date, observation_length):
+    """
+    This function determines the desired start and end date for the yearly analysis.
+
+    Args:
+        data_date (pd.DataFrame) :  dates on which actions occur in datetime format.
+        observation_length (int) : amount of recent months you want for the analysis.
+
+    Returns:
+        start_date (timestamp) : start date for the analysis.
+        end_date (timestamp) : end date for the analysis.
+
+    """
     first_date = data_date.iloc[0]
     last_date = data_date.iloc[-1]
     if first_date < last_date - relativedelta(years=observation_length):
@@ -69,6 +74,20 @@ def determine_observation_period_yearly(data_date, observation_length):
 
 
 def combine_multiple_datapoints_on_one_date(data, combine_fill_method):
+    """ 
+    This function combines, for example, multiple transactions that occur on the 
+    same day into one large transaction. Transactions have to be summed on one
+    day, but for balances the last one is taken. Hence the combine_fill_method
+    variable.
+
+    Args:
+        data (pd.DataFrame()) : column with datetime and column to be combined.
+        combine_fill_method (str) : 'balance' or 'transaction'.
+
+    Returns:
+        combined_data (pd.DataFrame()) : column with datetime and combined column.
+
+    """
     if combine_fill_method == "balance":
         combined_data = pd.DataFrame([[data.iloc[0,0], data.iloc[-1,1]]], columns=data.columns)
     elif combine_fill_method == "transaction":
@@ -79,15 +98,32 @@ def combine_multiple_datapoints_on_one_date(data, combine_fill_method):
 
 
 def fill_empty_dates(data, combine_fill_method, start_date, end_date):
+    """
+    This function fills the empty dates where no actions occur. This is
+    necessary for the signal processing methods to work. A column with transactions
+    is filled with 0's, but for balance it is forwardfilled and then backward.
+
+    Args:
+        data (pd.DataFrame()) : dataframe with only dates where actions occur.
+        combine_fill_method (str) : 'balance' or 'transaction'.
+        start_date (timestamp) : start date for the analysis.
+        end_date (timestamp) : end date for the analysis.
+
+    Returns:
+        data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
+        
+
+    """
+    # create range of dates for analysis, then merge to select only relevant data
     dates = pd.DataFrame(pd.date_range(start_date, end_date, freq="D", name=data.columns[0]))
     data_period = dates.merge(data, how="inner")
 
-    # move data on leap-year-day (29 feb) to 28 feb
+    # move data on leap-year-day (29 feb) to 28 feb  ## FUNCTIONING BADLY
     data_period.iloc[:,0][data_period.iloc[:,0].astype(str).str.endswith("02-29")] = data_period.iloc[:,0][
         data_period.iloc[:,0].astype(str).str.endswith("02-29")
     ] - pd.Timedelta(days=1) #deze is niet goed, moet het niet gewoon zijn = 28feb?
     
-    # wat dacht je van?
+    # Trying: not working
     # data_period.iloc[:,0][data_period.iloc[:,0].astype(str).str.endswith("02-29")] -= pd.Timedelta(days=1) #deze is niet goed, moet het niet gewoon zijn = 28feb?    
     
     # combine multiple datapoints that occur on same day
@@ -96,10 +132,12 @@ def fill_empty_dates(data, combine_fill_method, start_date, end_date):
         .apply(combine_multiple_datapoints_on_one_date, combine_fill_method=combine_fill_method)
         .reset_index(drop=True)
     )
-
-    dates = dates[~dates.date.astype(str).str.endswith("02-29")]  # drop 29th of feb
+    
+    # drop 29th of feb and merge with range of dates to get nans
+    dates = dates[~dates.date.astype(str).str.endswith("02-29")]  
     data_empty = dates.merge(data_combined, how="outer")
-
+    
+    # fill the nans in the dataframe in specific way
     if combine_fill_method == "balance":
         data_filled = data_empty.fillna(method="ffill")
         data_filled = data_filled.fillna(method="bfill")
@@ -123,21 +161,59 @@ def fill_empty_dates(data, combine_fill_method, start_date, end_date):
 #     return pd.concat([data.iloc[:,0], transformed_data],axis=1)
 
 def prepare_data_monthly(data, fill_combine_method, observation_length):
+    """
+    This function selects the desired observation length and fills the dataframe.
+    This is done specifically for the monthly analysis. The data is handled
+    differently depending on whether it's transaction or balance data.
+
+    Args:
+        data (pd.DataFrame()) : dataframe with only dates where actions occur.
+        combine_fill_method (str) : 'balance' or 'transaction'.
+        observation_length (int) : amount of recent months you want for the analysis.
+
+    Returns:
+        data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
+
+    """
     start_date, end_date = determine_observation_period_monthly(data.iloc[:,0], observation_length)
-    # combined_days = combine_multiple_datapoints_on_one_date(data, fill_combine_method)
-    filled_data = fill_empty_dates(data, fill_combine_method, start_date, end_date)
-    return filled_data
+    data_filled = fill_empty_dates(data, fill_combine_method, start_date, end_date)
+    return data_filled
 
 def prepare_data_yearly(data, fill_combine_method, observation_length):
+    """
+    This function selects the desired observation length and fills the dataframe.
+    This is done specifically for the yearly analysis. The data is handled
+    differently depending on whether it's transaction or balance data.
+
+    Args:
+        data (pd.DataFrame()) : dataframe with only dates where actions occur.
+        combine_fill_method (str) : 'balance' or 'transaction'.
+        observation_length (int) : amount of recent months you want for the analysis.
+
+    Returns:
+        data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
+
+    """
     start_date, end_date = determine_observation_period_yearly(data.iloc[:,0], observation_length)
-    # combined_days = combine_multiple_datapoints_on_one_date(data, fill_combine_method)
-    filled_data = fill_empty_dates(data, fill_combine_method, start_date, end_date)
-    return filled_data
+    data_filled = fill_empty_dates(data, fill_combine_method, start_date, end_date)
+    return data_filled
 
 def prepare_data_overall(data, fill_combine_method):
-    # combined_dates = combine_multiple_datapoints_on_one_date(data, fill_combine_method)
-    filled_data = fill_empty_dates(data, fill_combine_method)
-    return filled_data
+    """
+    This function selects the desired observation length and fills the dataframe.
+    This is done specifically for the overall analysis. The data is handled
+    differently depending on whether it's transaction or balance data.
+
+    Args:
+        data (pd.DataFrame()) : dataframe with only dates where actions occur.
+        combine_fill_method (str) : 'balance' or 'transaction'.
+
+    Returns:
+        data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
+
+    """
+    data_filled = fill_empty_dates(data, fill_combine_method)
+    return data_filled
 
 #%%
 

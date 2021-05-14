@@ -43,14 +43,17 @@ dataset = dataset.iloc[0:2000,:]
 #%%
 
 list_featuretypes = ["B","F","W_B"]
+list_featuretypes = ["B"]
 
 
 # data = dataset
 
 # transaction_features_monthly = compute_features_monthly(data[["date","transaction"]], "transaction", list_featuretypes=list_of_featuretypes)
 # balance_features_monthly = compute_features_monthly(data[["date","balance"]], "balance", list_of_featuretypes)
+current = timeit.default_timer()
 
 transaction_features_monthly = dataset[["account_id", "date", "transaction"]].groupby("account_id").apply(compute_features_monthly, combine_fill_method="transaction", list_featuretypes=list_featuretypes).reset_index(level=1, drop=True)
+print(timeit.default_timer() - current); current = timeit.default_timer()
 
 
 
@@ -60,10 +63,10 @@ transaction_features_monthly = dataset[["account_id", "date", "transaction"]].gr
 
 #%% TRANSFORMS
 
-list_of_transforms = ["ICA", "PCA"] # transforms gebeuren erbuiten 
-ICA_data = ICA(data)
-PCA_data = PCA(data)
-ICA_1_features_monthly = compute_features_monthly(ICA_data[["date", "ICA_1"]])
+# list_of_transforms = ["ICA", "PCA"] # transforms gebeuren erbuiten 
+# ICA_data = ICA(data)
+# PCA_data = PCA(data)
+# ICA_1_features_monthly = compute_features_monthly(ICA_data[["date", "ICA_1"]])
 
 
 
