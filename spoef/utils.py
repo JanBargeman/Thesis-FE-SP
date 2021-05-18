@@ -1,19 +1,19 @@
 import pandas as pd
 from dateutil.relativedelta import relativedelta
+from functools import reduce
 
-#%%
 
-# dataset = pd.read_csv("personal/data/dataset.csv")
-# dataset.date = pd.to_datetime(dataset.date, format="%y%m%d")
+#%% For testing functions
 
-# dataset_orig = dataset.copy()
+# data = pd.read_csv("personal/data/data.csv")
+# data.date = pd.to_datetime(data.date, format="%y%m%d")
 
-# #%% make test dataset
-# dataset = dataset.iloc[0:2000,:]
-# data_acc = dataset[dataset.account_id == 1787]
+# #%% make test data
+# data = data.iloc[0:2000,:]
+# data_acc = data[data.account_id == 1787]
 # data_used = data_acc[["date","balance"]]
-# # dataset = dataset[dataset.account_id == 276]
-# # dataset = dataset[dataset.account_id == 1843]
+# # data = data[data.account_id == 276]
+# # data = data[data.account_id == 1843]
 
 #%%
 def determine_observation_period_monthly(data_date, observation_length):
@@ -21,7 +21,7 @@ def determine_observation_period_monthly(data_date, observation_length):
     This function determines the desired start and end date for the monthly analysis.
 
     Args:
-        data_date (pd.DataFrame) :  dates on which actions occur in datetime format.
+        data_date (pd.DataFrame()) :  dates on which actions occur in datetime format.
         observation_length (int) : amount of recent months you want for the analysis.
 
     Returns:
@@ -32,7 +32,9 @@ def determine_observation_period_monthly(data_date, observation_length):
     first_date = data_date.iloc[0]
     last_date = data_date.iloc[-1]
     if first_date < last_date - relativedelta(months=observation_length):
-        start_date = last_date.to_period("M").to_timestamp() - relativedelta(months=observation_length - 1)
+        start_date = last_date.to_period("M").to_timestamp() - relativedelta(
+            months=observation_length - 1
+        )
         end_date = (
             last_date.to_period("M").to_timestamp()
             + relativedelta(months=1)
@@ -40,7 +42,7 @@ def determine_observation_period_monthly(data_date, observation_length):
         )
     else:
         raise ValueError("data is not full observation length")
-        
+
     return start_date, end_date
 
 
@@ -63,19 +65,16 @@ def determine_observation_period_yearly(data_date, observation_length):
         start_date = last_date.to_period("M").to_timestamp() - relativedelta(
             years=observation_length
         )
-        end_date = (
-            last_date.to_period("M").to_timestamp()
-            - relativedelta(days=1)
-        )
+        end_date = last_date.to_period("M").to_timestamp() - relativedelta(days=1)
     else:
         raise ValueError("data is not full observation length")
-        
+
     return start_date, end_date
 
 
 def combine_multiple_datapoints_on_one_date(data, combine_fill_method):
-    """ 
-    This function combines, for example, multiple transactions that occur on the 
+    """
+    This function combines, for example, multiple transactions that occur on the
     same day into one large transaction. Transactions have to be summed on one
     day, but for balances the last one is taken. Hence the combine_fill_method
     variable.
@@ -89,11 +88,17 @@ def combine_multiple_datapoints_on_one_date(data, combine_fill_method):
 
     """
     if combine_fill_method == "balance":
-        combined_data = pd.DataFrame([[data.iloc[0,0], data.iloc[-1,1]]], columns=data.columns)
+        combined_data = pd.DataFrame(
+            [[data.iloc[0, 0], data.iloc[-1, 1]]], columns=data.columns
+        )
     elif combine_fill_method == "transaction":
-        combined_data = pd.DataFrame([[data.iloc[0,0], data.iloc[:,1].sum()]], columns=data.columns)
+        combined_data = pd.DataFrame(
+            [[data.iloc[0, 0], data.iloc[:, 1].sum()]], columns=data.columns
+        )
     else:
-        raise ValueError("invalid combine_fill_method, please choose 'balance' or 'transaction'")
+        raise ValueError(
+            "invalid combine_fill_method, please choose 'balance' or 'transaction'"
+        )
     return combined_data
 
 
@@ -111,32 +116,41 @@ def fill_empty_dates(data, combine_fill_method, start_date, end_date):
 
     Returns:
         data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
-        
+
 
     """
     # create range of dates for analysis, then merge to select only relevant data
-    dates = pd.DataFrame(pd.date_range(start_date, end_date, freq="D", name=data.columns[0]))
+    dates = pd.DataFrame(
+        pd.date_range(start_date, end_date, freq="D", name=data.columns[0])
+    )
     data_period = dates.merge(data, how="inner")
 
     # move data on leap-year-day (29 feb) to 28 feb  ## FUNCTIONING BADLY
-    data_period.iloc[:,0][data_period.iloc[:,0].astype(str).str.endswith("02-29")] = data_period.iloc[:,0][
-        data_period.iloc[:,0].astype(str).str.endswith("02-29")
-    ] - pd.Timedelta(days=1) #deze is niet goed, moet het niet gewoon zijn = 28feb?
-    
+    data_period.iloc[:, 0][
+        data_period.iloc[:, 0].astype(str).str.endswith("02-29")
+    ] = data_period.iloc[:, 0][
+        data_period.iloc[:, 0].astype(str).str.endswith("02-29")
+    ] - pd.Timedelta(
+        days=1
+    )  # deze is niet goed, moet het niet gewoon zijn = 28feb?
+
     # Trying: not working
-    # data_period.iloc[:,0][data_period.iloc[:,0].astype(str).str.endswith("02-29")] -= pd.Timedelta(days=1) #deze is niet goed, moet het niet gewoon zijn = 28feb?    
-    
+    # data_period.iloc[:,0][data_period.iloc[:,0].astype(str).str.endswith("02-29")] -= pd.Timedelta(days=1) #deze is niet goed, moet het niet gewoon zijn = 28feb?
+
     # combine multiple datapoints that occur on same day
     data_combined = (
-        data_period.groupby(data_period.iloc[:,0].dt.to_period("D"))
-        .apply(combine_multiple_datapoints_on_one_date, combine_fill_method=combine_fill_method)
+        data_period.groupby(data_period.iloc[:, 0].dt.to_period("D"))
+        .apply(
+            combine_multiple_datapoints_on_one_date,
+            combine_fill_method=combine_fill_method,
+        )
         .reset_index(drop=True)
     )
-    
+
     # drop 29th of feb and merge with range of dates to get nans
-    dates = dates[~dates.date.astype(str).str.endswith("02-29")]  
+    dates = dates[~dates.date.astype(str).str.endswith("02-29")]
     data_empty = dates.merge(data_combined, how="outer")
-    
+
     # fill the nans in the dataframe in specific way
     if combine_fill_method == "balance":
         data_filled = data_empty.fillna(method="ffill")
@@ -144,21 +158,12 @@ def fill_empty_dates(data, combine_fill_method, start_date, end_date):
     elif combine_fill_method == "transaction":
         data_filled = data_empty.fillna(0)
     else:
-        ValueError("invalid combine_fill_method, please choose 'balance' or 'transaction'")
-  
+        ValueError(
+            "invalid combine_fill_method, please choose 'balance' or 'transaction'"
+        )
+
     return data_filled
 
-# def ICA(data):
-#     data_to_transform = data.iloc[:,1:]
-#     transformed_data = ICA_global.fit_transform(data_to_transform)
-#     transformed_data.columns = ["ICA " + x for x in range(data.shape[1]-1)]
-#     return pd.concat([data.iloc[:,0], transformed_data],axis=1)
-
-# def PCA(data):
-#     data_to_transform = data.iloc[:,1:]
-#     transformed_data = PCA_global.fit_transform(data_to_transform)
-#     transformed_data.columns = ["PCA " + x for x in range(data.shape[1]-1)]
-#     return pd.concat([data.iloc[:,0], transformed_data],axis=1)
 
 def prepare_data_monthly(data, fill_combine_method, observation_length):
     """
@@ -175,9 +180,12 @@ def prepare_data_monthly(data, fill_combine_method, observation_length):
         data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
 
     """
-    start_date, end_date = determine_observation_period_monthly(data.iloc[:,0], observation_length)
+    start_date, end_date = determine_observation_period_monthly(
+        data.iloc[:, 0], observation_length
+    )
     data_filled = fill_empty_dates(data, fill_combine_method, start_date, end_date)
     return data_filled
+
 
 def prepare_data_yearly(data, fill_combine_method, observation_length):
     """
@@ -194,9 +202,12 @@ def prepare_data_yearly(data, fill_combine_method, observation_length):
         data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
 
     """
-    start_date, end_date = determine_observation_period_yearly(data.iloc[:,0], observation_length)
+    start_date, end_date = determine_observation_period_yearly(
+        data.iloc[:, 0], observation_length
+    )
     data_filled = fill_empty_dates(data, fill_combine_method, start_date, end_date)
     return data_filled
+
 
 def prepare_data_overall(data, fill_combine_method):
     """
@@ -212,16 +223,107 @@ def prepare_data_overall(data, fill_combine_method):
         data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
 
     """
-    data_filled = fill_empty_dates(data, fill_combine_method)
+    data_filled = fill_empty_dates(
+        data, fill_combine_method, data.iloc[0, 0], data.iloc[-1, 0]
+    )
     return data_filled
 
-#%%
 
-# start_date, end_date = determine_observation_period_monthly(data_used.iloc[:,0], 24)
-# start_date, end_date = determine_observation_period_yearly(data_used.iloc[:,0], 2)
+def count_na(list_of_dfs):
+    """
+    PERSONAL FUNCTION, not part of open source (possible unit test):
+    This function counts the amount of NaN's in a list of dataframes. This is
+    useful for check if feature creation malfunctions.
 
-# data_date = data_used.iloc[:,0]
-# observation_length=12
-# combine_fill_method = "balance"
+    Args:
+        list_of_dfs (list of pd.DataFrames()) : dataframes to count NaN's in
 
-# data_filled = fill_empty_dates(data_used, combine_fill_method, start_date, end_date)
+    Returns:
+        None
+
+    """
+    for df in list_of_dfs:
+        print(df.isna().sum().sum())
+    return
+
+
+def combine_features_dfs(list_of_dfs):
+    """
+    This function merges a list of dataframes into one large dataframe.
+    Merge happens on index, which in this case is the identifier.
+
+    Args:
+        list_of_dfs (list of pd.DataFrames()) : dataframes to combine
+
+    Returns:
+        combined_dfs (pd.DataFrame()) :
+
+    """
+    combined_dfs = reduce(
+        lambda left, right: pd.merge(
+            left, right, left_index=True, right_index=True, how="inner"
+        ),
+        list_of_dfs,
+    )
+    return combined_dfs
+
+
+def select_features_subset(data, list_subset):
+    """
+    This function allows users to test different subsets of features against
+    each other. By comparing for example the basic ["B"] features subset with the
+    the basic and fourier ["B", "F"] features subset, one can see the added
+    value of the fourier features.
+
+    list_subset:
+        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "F" for Fourier - n largest frequencies and their values.
+        "W" for Wavelet - all approximation and details coefficients at each depth.
+        "W_B" for Wavelet Basic - "B"/Basic (min, max, etc) at each depth.
+
+    Args:
+        data (pd.DataFrame()) : dataframe with all features
+        list_subset (list of str) : list with desired subset of features
+
+    Returns:
+        data_subset (pd.DataFrame()) : dataframe with subset of featuers
+
+    """
+    data_B = pd.DataFrame()
+    data_F = pd.DataFrame()
+    data_W = pd.DataFrame()
+    data_W_B = pd.DataFrame()
+    data_tr = pd.DataFrame()
+    data_ba = pd.DataFrame()
+    list_subset_dfs = []
+
+    if "B" in list_subset:
+        data_B = data[
+            [
+                col
+                for col in data.columns
+                if ("fft" not in col and "wavelet" not in col and "wav_B" not in col)
+            ]
+        ]
+        list_subset_dfs.append(data_B)
+    if "F" in list_subset:
+        data_F = data[[col for col in data.columns if "fft" in col]]
+        list_subset_dfs.append(data_F)
+    if "W" in list_subset:
+        data_W = data[[col for col in data.columns if "wavelet" in col]]
+        list_subset_dfs.append(data_W)
+    if "W_B" in list_subset:
+        data_W_B = data[[col for col in data.columns if "wav_B" in col]]
+        list_subset_dfs.append(data_W_B)
+    if "tr" in list_subset:
+        data_tr = data[[col for col in data.columns if "tr" in col]]
+        list_subset_dfs.append(data_tr)
+    if "ba" in list_subset:
+        data_ba = data[[col for col in data.columns if "ba" in col]]
+        list_subset_dfs.append(data_ba)
+
+    data_subset = combine_features_dfs(list_subset_dfs)
+    if len(data_subset) == 0:
+        raise ValueError("Please pick from types of features")
+
+    return data_subset
