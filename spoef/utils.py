@@ -1,6 +1,9 @@
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 from functools import reduce
+import os
+
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 
 #%% For testing functions
@@ -327,3 +330,10 @@ def select_features_subset(data, list_subset):
         raise ValueError("Please pick from types of features")
 
     return data_subset
+
+
+def write_out_list_dfs(list_dfs, location):
+    for item in list_dfs:
+        print("Writing %s" %item)
+        eval("%s" %item).to_csv("personal/results/"+location+"/%s.csv" %item, index=False)
+    return

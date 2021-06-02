@@ -1,11 +1,15 @@
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, roc_auc_score
+from sklearn.model_selection import StratifiedKFold
 from lightgbm import LGBMClassifier
 import matplotlib.pyplot as plt
+import os
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.utils import combine_features_dfs, count_na
 from spoef.features import create_all_features, feature_creation_yearly
+
 
 
 def grid_search_LGBM(data, test_size=0.4):
@@ -30,8 +34,8 @@ def grid_search_LGBM(data, test_size=0.4):
 
     list_n_est = [10, 30, 100]
     list_max_depth = [2, 4, 8]
-    list_num_leaves = [3, 6, 10]
-    list_learn_rate = [0.1, 0.05, 1]
+    list_num_leaves = [6, 10]
+    list_learn_rate = [0.1, 0.05]
 
     # list_reg_alpha = [0.0, 10]
     # list_reg_lambda = [0.0, 10]
@@ -46,12 +50,14 @@ def grid_search_LGBM(data, test_size=0.4):
 
     max_auc = 0
     auc_list = []
+    AUC_score_avg_list = []
 
     for n_est in list_n_est:
         for max_depth in list_max_depth:
             for num_leaves in list_num_leaves:
                 for learn_rate in list_learn_rate:
                     i = i + 1
+                    
                     lgbm = LGBMClassifier(
                         objective="multiclass",
                         n_estimators=n_est,
@@ -59,28 +65,39 @@ def grid_search_LGBM(data, test_size=0.4):
                         num_leaves=num_leaves,
                         learning_rate=learn_rate,
                         random_state=0,
-                    )
-                    lgbm.fit(X_train, y_train)
-                    current_params = [n_est, max_depth, num_leaves, learn_rate]
-                    AUC_score = roc_auc_score(
-                        y_valid, lgbm.predict_proba(X_valid), multi_class="ovo"
-                    )
-                    current_conf_matrix = confusion_matrix(
-                        y_valid, lgbm.predict(X_valid)
-                    )
-                    # print(current_params, ":")
-                    # print("\n", current_conf_matr)
-                    # print("AUC:", AUC_score)
-                    # print("\n\n")
-                    print(
-                        "\r",
-                        "\rLoading, please wait: "
-                        + "%.1f" % (100 * i / length_search)
-                        + "%",
-                        end="",
-                    )
-                    auc_list.append(AUC_score)
-                    if AUC_score > max_auc:
+                    )                    
+                    
+                    skf = StratifiedKFold(n_splits=5)
+                    
+                    for train_index, test_index in skf.split(X,Y):
+                        X_train, X_valid = X[train_index], X[test_index]
+                        y_train, y_valid = Y[train_index], Y[test_index]              
+                        
+
+                        lgbm.fit(X_train, y_train)
+                        
+                        current_params = [n_est, max_depth, num_leaves, learn_rate]
+                        AUC_score = roc_auc_score(
+                            y_valid, lgbm.predict_proba(X_valid), multi_class="ovo"
+                        )
+                        current_conf_matrix = confusion_matrix(
+                            y_valid, lgbm.predict(X_valid)
+                        )
+                        # print(current_params, ":")
+                        # print("\n", current_conf_matr)
+                        print("AUC:", AUC_score)
+                        # print("\n\n")
+                        print(
+                            "\r",
+                            "\rLoading, please wait: "
+                            + "%.1f" % (100 * i / length_search)
+                            + "%",
+                            end="",
+                        )
+                        auc_list.append(AUC_score)
+                    AUC_score_avg = sum(auc_list)/len(auc_list)
+                    AUC_score_avg_list.append(AUC_score_avg)
+                    if AUC_score_avg > max_auc:
                         max_auc = AUC_score
                         best_params = current_params
                         best_conf_matrix = current_conf_matrix
@@ -88,9 +105,10 @@ def grid_search_LGBM(data, test_size=0.4):
 
     print("\n\nMax AUC: " + str(max_auc) + " at " + str(best_params) + "\n")
     print(str(best_conf_matrix))
-    plt.hist(auc_list)
+    plt.hist(AUC_score_avg_list)
     plt.show()
-    return best_LGBM
+    print("\nMean AUC: " + str(sum(AUC_score_avg_list)/len(AUC_score_avg_list)))
+    return best_LGBM, AUC_score_avg_list
 
 
 def grid_search_RF(data, test_size=0.4):
@@ -113,8 +131,8 @@ def grid_search_RF(data, test_size=0.4):
         X, Y, test_size=test_size, random_state=0
     )
 
-    list_n_trees = [100, 300, 1000]
-    list_max_depth = [10, 50, 300, None]
+    list_n_trees = [100, 300]
+    list_max_depth = [10, 50]
 
     length_search = len(list_n_trees) * len(list_max_depth)
     i = 0
@@ -136,7 +154,7 @@ def grid_search_RF(data, test_size=0.4):
             current_conf_matrix = confusion_matrix(y_valid, rf.predict(X_valid))
             # print(current_params, ":")
             # print("\n", current_conf_matr)
-            # print("AUC:", AUC_score)
+            print("AUC:", AUC_score)
             # print("\n\n"
             print(
                 "\r",

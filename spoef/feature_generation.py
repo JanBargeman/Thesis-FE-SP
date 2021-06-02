@@ -5,6 +5,8 @@ import scipy.fft
 import numpy as np
 import pywt
 import timeit
+import os
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.utils import (
     prepare_data_monthly,
@@ -14,21 +16,22 @@ from spoef.utils import (
     combine_features_dfs,
 )
 
+
+
 #%% For testing functions
 
-# data = pd.read_csv("personal/data/data.csv")
-# data.date = pd.to_datetime(data.date, format="%y%m%d")
+data = pd.read_csv("personal/data/data.csv")
+data.date = pd.to_datetime(data.date, format="%y%m%d")
 
-# #%% make test data
-# data = data.iloc[0:2000,:]
+#%% make test data
+data = data.iloc[0:2000,:]
 # data_acc = data[data.account_id == 1787]
 # data_used = data_acc[["date","balance"]]
-# # data = data[data.account_id == 276]
-# # data = data[data.account_id == 1843]
+# data = data[data.account_id == 276]
+# data = data[data.account_id == 1843]
 
 
 #%%
-
 
 def compute_list_featuretypes(
     data,
@@ -40,10 +43,10 @@ def compute_list_featuretypes(
     """
     This function lets the user choose which combination of features they
     want to have computed. Please note that "W" will not be computed for the
-    overall data.
+    overall data. This is because "W" depends on len(data), which varies for overall.
 
     list_featuretypes:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "B" for Basic - min, max, mean, kurt ,skew, std, sum.
         "F" for Fourier - n largest frequencies and their values.
         "W" for Wavelet - all approximation and details coefficients at each depth.
         "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -59,6 +62,15 @@ def compute_list_featuretypes(
         features (pd.DataFrame()) : row of features.
 
     """
+    
+    if type(list_featuretypes) != list:
+        raise AttributeError("'list_featuretypes' must be a list.")
+    
+    allowed_components = ["B", "F", "W", "W_B"]
+    for argument in list_featuretypes:
+        if argument not in allowed_components:
+            raise ValueError(f"argument must be one of {allowed_components}")
+    
     features_basic = pd.DataFrame()
     features_fourier = pd.DataFrame()
     features_wavelet = pd.DataFrame()
@@ -90,6 +102,7 @@ def compute_fourier(data, fourier_n_largest_frequencies):
     Args:
         data (pd.DataFrame()) : one column from which to make fourier features.
         fourier_n_largest_frequencies (int) : amount of fourier features.
+            possible values: less than len(data)
 
     Returns:
         features (pd.DataFrame()) : (1 x 2n) row of largest frequencies and values.
@@ -123,7 +136,7 @@ def compute_basic(data):
     """
     This function creates basic features.
 
-    "B" for Basic - min, max, mean, kurt ,skew, std.
+    "B" for Basic - min, max, mean, kurt ,skew, std, sum.
 
     Args:
         data (pd.DataFrame()) : one column from which to make basic features.
@@ -160,7 +173,9 @@ def compute_wavelet(data, wavelet_depth, mother_wavelet):
     Args:
         data (pd.DataFrame()) : one column from which to make wavelet features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: depends on len(data), approx 2^wavelet_depth = len(data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : row of wavelet features.
@@ -189,7 +204,9 @@ def compute_wavelet_basic(data, wavelet_depth, mother_wavelet):
     Args:
         data (pd.DataFrame()) : one column from which to make basic wavelet features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: depends on len(data), approx 2^wavelet_depth = len(data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : (2 x 7 x wavelet_depth) row of wavelet features.
@@ -226,6 +243,7 @@ def compute_features_monthly(
     fourier_n_largest_frequencies,
     wavelet_depth,
     mother_wavelet,
+    normalize,
 ):
     """
     This function computes different types of features for one identifier.
@@ -233,7 +251,7 @@ def compute_features_monthly(
     can be tweaked through several variables.
 
     list_featuretypes:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "B" for Basic - min, max, mean, kurt ,skew, std, sum.
         "F" for Fourier - n largest frequencies and their values.
         "W" for Wavelet - all approximation and details coefficients at each depth.
         "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -245,7 +263,9 @@ def compute_features_monthly(
         list_featuretypes (list) : list of feature types to be computed.
         fourier_n_largest_frequencies (int) : amount of fourier features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: 3 is the max, depends on len(used_data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : row of monthly features for one identifier.
@@ -266,8 +286,12 @@ def compute_features_monthly(
             (prepared_data.iloc[:, 0] >= start_date + relativedelta(months=month))
             & (prepared_data.iloc[:, 0] < start_date + relativedelta(months=month + 1))
         ]
+        used_data = data_month.iloc[:,1]
+        if normalize == True:
+            used_data = (used_data-used_data.min())/((used_data.max()+1)-used_data.min())
+        
         monthly_features = compute_list_featuretypes(
-            data_month.iloc[:, 1],
+            used_data,
             list_featuretypes,
             fourier_n_largest_frequencies,
             wavelet_depth,
@@ -296,6 +320,7 @@ def compute_features_yearly(
     fourier_n_largest_frequencies,
     wavelet_depth,
     mother_wavelet,
+    normalize,
 ):
     """
     This function computes different types of features for one identifier.
@@ -303,7 +328,7 @@ def compute_features_yearly(
     can be tweaked through several variables.
 
     list_featuretypes:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "B" for Basic - min, max, mean, kurt ,skew, std, sum.
         "F" for Fourier - n largest frequencies and their values.
         "W" for Wavelet - all approximation and details coefficients at each depth.
         "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -315,7 +340,9 @@ def compute_features_yearly(
         list_featuretypes (list) : list of feature types to be computed.
         fourier_n_largest_frequencies (int) : amount of fourier features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: 6 is the max, depends on len(used_data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : row of yearly features for one identifier.
@@ -336,8 +363,11 @@ def compute_features_yearly(
             (prepared_data.iloc[:, 0] >= start_date + relativedelta(years=year))
             & (prepared_data.iloc[:, 0] < start_date + relativedelta(years=year + 1))
         ]
+        used_data = data_year.iloc[:,1]
+        if normalize == True:
+            used_data = (used_data-used_data.min())/(used_data.max()-used_data.min())
         yearly_features = compute_list_featuretypes(
-            data_year.iloc[:, 1],
+            used_data,
             list_featuretypes,
             fourier_n_largest_frequencies,
             wavelet_depth,
@@ -365,17 +395,19 @@ def compute_features_overall(
     fourier_n_largest_frequencies,
     wavelet_depth,
     mother_wavelet,
+    normalize,
 ):
     """
     This function computes different types of features for one identifier.
     It does this for the entire length of the data. The feature creation
     can be tweaked through several variables.
 
-    Please note that "W" is not applicable for overall feature creation. It will
-    be automatically removed from the list_featuretypes.
+    Please note that "W" is not applicable for overall feature creation. 
+    This is because "W" depends on len(data), which varies for overall.
+    It will be automatically removed from list_featuretypes.
 
     list_featuretypes:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "B" for Basic - min, max, mean, kurt ,skew, std, sum.
         "F" for Fourier - n largest frequencies and their values.
         "W" for Wavelet - is NOT APPLICABLE for overall
         "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -386,7 +418,9 @@ def compute_features_overall(
         list_featuretypes (list) : list of feature types to be computed.
         fourier_n_largest_frequencies (int) : amount of fourier features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: 6 is the max, depends on len(used_data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : row of overall features for one identifier.
@@ -398,12 +432,15 @@ def compute_features_overall(
     if "W" in list_featuretypes:  # W does not work on overall data
         list_featuretypes.remove("W")
 
-    # select only relevant period and fill the empty date
+    # fill the empty date
     prepared_data = prepare_data_overall(data, combine_fill_method)
+    used_data = prepared_data.iloc[:,1]
 
+    if normalize == True:
+        used_data = (used_data-used_data.min())/(used_data.max()-used_data.min())
     # create features overall
     features = compute_list_featuretypes(
-        prepared_data.iloc[:, 1],
+        used_data,
         list_featuretypes,
         fourier_n_largest_frequencies,
         wavelet_depth,
@@ -415,7 +452,7 @@ def compute_features_overall(
     return features
 
 
-def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
+def create_all_features(data, list_featuretypes, mother_wavelet="db2", normalize=False):
     """
     PERSONAL FUNCTION, not part of open source:
     This function creates all features for transactions and balances.
@@ -424,7 +461,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
     it into one large dataframe.
     
     list_featuretypes:
-    "B" for Basic - min, max, mean, kurt ,skew, std.
+    "B" for Basic - min, max, mean, kurt ,skew, std, sum.
     "F" for Fourier - n largest frequencies and their values.
     "W" for Wavelet - is NOT APPLICABLE for overall
     "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -433,6 +470,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
         data (pd.DataFrame()) : data for which to make features.
         list_featuretypes (list) : list of feature types to be computed.
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : dataframe with all features for all identifiers.
@@ -444,6 +482,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
         data[["account_id", "date", "transaction"]],
         "account_id",
         "transaction",
+        normalize,
         list_featuretypes,
         mother_wavelet=mother_wavelet,
     )
@@ -451,6 +490,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
         data[["account_id", "date", "balance"]],
         "account_id",
         "balance",
+        normalize,
         list_featuretypes,
         mother_wavelet=mother_wavelet,
     )
@@ -461,6 +501,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
         data[["account_id", "date", "transaction"]],
         "account_id",
         "transaction",
+        normalize,
         list_featuretypes,
         mother_wavelet=mother_wavelet,
     )
@@ -468,6 +509,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
         data[["account_id", "date", "balance"]],
         "account_id",
         "balance",
+        normalize,
         list_featuretypes,
         mother_wavelet=mother_wavelet,
     )
@@ -478,6 +520,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
         data[["account_id", "date", "transaction"]],
         "account_id",
         "transaction",
+        normalize,
         list_featuretypes,
         mother_wavelet=mother_wavelet,
     )
@@ -485,6 +528,7 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
         data[["account_id", "date", "balance"]],
         "account_id",
         "balance",
+        normalize,
         list_featuretypes,
         mother_wavelet=mother_wavelet,
     )
@@ -501,6 +545,9 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2"):
     count_na(list_features_dfs)
 
     all_features = combine_features_dfs(list_features_dfs)
+    
+    if normalize == True:
+        all_features.columns = ["norm " + col for col in all_features.columns]
 
     return all_features
 
@@ -512,6 +559,7 @@ def feature_creation_monthly(
     data,
     grouper,
     combine_fill_method,
+    normalize,
     list_featuretypes=["B"],
     observation_length=12,
     fourier_n_largest_frequencies=10,
@@ -523,7 +571,7 @@ def feature_creation_monthly(
     creation.
 
     list_featuretypes:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "B" for Basic - min, max, mean, kurt ,skew, std, sum.
         "F" for Fourier - n largest frequencies and their values.
         "W" for Wavelet - all approximation and details coefficients at each depth.
         "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -535,7 +583,9 @@ def feature_creation_monthly(
         list_featuretypes (list) : list of feature types to be computed.
         fourier_n_largest_frequencies (int) : amount of fourier features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: 3 is the max, depends on len(data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
     Returns:
         features (pd.DataFrame()) : df with row of monthly features for each identifier.
 
@@ -550,6 +600,7 @@ def feature_creation_monthly(
             fourier_n_largest_frequencies=fourier_n_largest_frequencies,
             wavelet_depth=wavelet_depth,
             mother_wavelet=mother_wavelet,
+            normalize=normalize,
         )
         .reset_index(level=1, drop=True)
     )
@@ -560,6 +611,7 @@ def feature_creation_yearly(
     data,
     grouper,
     combine_fill_method,
+    normalize,
     list_featuretypes=["B"],
     observation_length=1,
     fourier_n_largest_frequencies=30,
@@ -571,7 +623,7 @@ def feature_creation_yearly(
     creation.
 
     list_featuretypes:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "B" for Basic - min, max, mean, kurt ,skew, std, sum.
         "F" for Fourier - n largest frequencies and their values.
         "W" for Wavelet - all approximation and details coefficients at each depth.
         "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -583,7 +635,9 @@ def feature_creation_yearly(
         list_featuretypes (list) : list of feature types to be computed.
         fourier_n_largest_frequencies (int) : amount of fourier features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: 6 is the max, depends on len(data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : df with row of yearly features for each identifier.
@@ -599,6 +653,7 @@ def feature_creation_yearly(
             fourier_n_largest_frequencies=fourier_n_largest_frequencies,
             wavelet_depth=wavelet_depth,
             mother_wavelet=mother_wavelet,
+            normalize=normalize,
         )
         .reset_index(level=1, drop=True)
     )
@@ -609,6 +664,7 @@ def feature_creation_overall(
     data,
     grouper,
     combine_fill_method,
+    normalize,
     list_featuretypes=["B"],
     fourier_n_largest_frequencies=50,
     wavelet_depth=6,
@@ -618,11 +674,12 @@ def feature_creation_overall(
     This function splits the data per identifier and performs the overall feature
     creation.
 
-    Please note that "W" is not applicable for overall feature creation. It will
-    be automatically removed from the list_featuretypes.
+    Please note that "W" is not applicable for overall feature creation. 
+    This is because "W" depends on len(data), which varies for overall. 
+    It will be automatically removed from list_featuretypes.
 
     list_featuretypes:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
+        "B" for Basic - min, max, mean, kurt ,skew, std, sum.
         "F" for Fourier - n largest frequencies and their values.
         "W" for Wavelet - is NOT APPLICABLE for overall
         "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
@@ -633,7 +690,9 @@ def feature_creation_overall(
         list_featuretypes (list) : list of feature types to be computed.
         fourier_n_largest_frequencies (int) : amount of fourier features.
         wavelet_depth (int) : level of depth up to which the wavelet is computed.
+            possible values: 6 is the max, depends on len(data)
         mother_wavelet (str) : type of wavelet used for the analysis.
+            possible values: "db2", "db4", "haar", see pywt.wavelist(kind="discrete")
 
     Returns:
         features (pd.DataFrame()) : df with row of overall features for each identifier.
@@ -648,7 +707,12 @@ def feature_creation_overall(
             fourier_n_largest_frequencies=fourier_n_largest_frequencies,
             wavelet_depth=wavelet_depth,
             mother_wavelet=mother_wavelet,
+            normalize=normalize,
         )
         .reset_index(level=1, drop=True)
     )
     return features
+
+
+
+
