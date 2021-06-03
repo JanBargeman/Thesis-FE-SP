@@ -4,13 +4,14 @@ import pandas as pd
 # import os as os
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
-from spoef.features import create_all_features
+from spoef.feature_generation import create_all_features
 from spoef.utils import combine_features_dfs, select_features_subset, write_out_list_dfs
 from spoef.benchmarking import grid_search_LGBM, grid_search_RF, search_mother_wavelet
 from spoef.transforms import create_all_features_transformed
 
 
 #%% Read in data
+
 data = pd.read_csv("personal/data/data.csv")
 data.date = pd.to_datetime(data.date, format="%y%m%d")
 status = data[["account_id", "status"]].drop_duplicates().set_index("account_id")
@@ -18,6 +19,7 @@ status = data[["account_id", "status"]].drop_duplicates().set_index("account_id"
 results_location = "public_czech"
 
 #%% Make test data
+
 data = data.iloc[0:20000, :]
 # data = data[data.account_id == 1787]
 # data = data[data.account_id == 276]
@@ -52,6 +54,7 @@ best_RF_all = grid_search_RF(data_all)      # db2: 0.8871 db4: 0.8655 ICA: 0.880
 # best_RF_SP = grid_search_RF(data_SP)        # db2: 0.8627 db4: 0.8486 ICA: 0.8658 PCA: 0.8636 samen: 0.8578 norm: 0.8717
 
 #%% Find optimal mother wavelet with only yearly features
+
 list_mother_wavelets = ["db3", "db5", "db6"]  # db2 0.7834, db4 0.788, 3&5 0.771/0.774
 test_size = 0.4
 
@@ -67,6 +70,7 @@ best_mother_wavelet = find_mother_wavelet()
 
 
 #%% Generate all features
+
 mother_wavelet = best_mother_wavelet
 
 regular_features = create_all_features(data, list_featuretypes, mother_wavelet)

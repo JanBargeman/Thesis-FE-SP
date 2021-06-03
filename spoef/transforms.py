@@ -13,7 +13,7 @@ from spoef.utils import (
     count_na,
     combine_features_dfs,
 )
-from spoef.features import compute_list_featuretypes
+from spoef.feature_generation import compute_list_featuretypes
 
 
 

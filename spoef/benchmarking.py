@@ -8,7 +8,7 @@ import os
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.utils import combine_features_dfs, count_na
-from spoef.features import create_all_features, feature_creation_yearly
+from spoef.feature_generation import create_all_features, feature_creation_yearly
 
 
 

@@ -4,7 +4,7 @@ import pandas as pd
 # import os as os
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
-from spoef.features import create_all_features
+from spoef.feature_generation import create_all_features
 from spoef.utils import combine_features_dfs, select_features_subset
 from spoef.benchmarking import grid_search_LGBM, grid_search_RF, search_mother_wavelet
 
