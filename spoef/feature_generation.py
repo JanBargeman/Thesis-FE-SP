@@ -20,15 +20,15 @@ from spoef.utils import (
 
 #%% For testing functions
 
-data = pd.read_csv("personal/data/data.csv")
-data.date = pd.to_datetime(data.date, format="%y%m%d")
+# data = pd.read_csv("personal/data/data.csv")
+# data.date = pd.to_datetime(data.date, format="%y%m%d")
 
-#%% make test data
-data = data.iloc[0:2000,:]
-# data_acc = data[data.account_id == 1787]
-# data_used = data_acc[["date","balance"]]
-# data = data[data.account_id == 276]
-# data = data[data.account_id == 1843]
+# #%% make test data
+# data = data.iloc[0:2000,:]
+# # data_acc = data[data.account_id == 1787]
+# # data_used = data_acc[["date","balance"]]
+# # data = data[data.account_id == 276]
+# # data = data[data.account_id == 1843]
 
 
 #%%
@@ -77,6 +77,10 @@ def compute_list_featuretypes(
     features_wavelet_basic = pd.DataFrame()
     if "B" in list_featuretypes:
         features_basic = compute_basic(data)
+        features_basic.columns = [
+            "B " + str(col)
+            for col in features_basic.columns
+        ]
     if "F" in list_featuretypes:
         features_fourier = compute_fourier(data, fourier_n_largest_frequencies)
     if "W" in list_featuretypes:
@@ -120,11 +124,11 @@ def compute_fourier(data, fourier_n_largest_frequencies):
     # Name the columns
     features = [*larges_indexes.tolist(), *largest_values]
     col_names_index = [
-        "fft index " + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
+        "fft index_" + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
         for i in range(int(len(features) / 2))
     ]
     col_names_size = [
-        "fft size " + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
+        "fft size_" + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
         for i in range(int(len(features) / 2))
     ]
     col_names = [*col_names_index, *col_names_size]
@@ -189,7 +193,7 @@ def compute_wavelet(data, wavelet_depth, mother_wavelet):
     wavelet = pywt.wavedec(data, wavelet=mother_wavelet, level=wavelet_depth)
     features = [item for sublist in wavelet for item in sublist]  # flatten list
 
-    col_names = ["wavelet " + str(i + 1) for i in range(len(features))]
+    col_names = ["wavelet depth_" + str(i + 1) for i in range(len(features))]
     features = pd.DataFrame([features], columns=col_names)
     return features
 
@@ -218,12 +222,12 @@ def compute_wavelet_basic(data, wavelet_depth, mother_wavelet):
         data_wavelet, coeffs = pywt.dwt(data_wavelet, wavelet=mother_wavelet)
         features_at_depth = compute_basic(pd.Series(data_wavelet))
         features_at_depth.columns = [
-            "wav_B depth " + str(i + 1) + " " + str(col)
+            "wav_B depth_" + str(i + 1) + "_" + str(col)
             for col in features_at_depth.columns
         ]
         features_at_depth_high = compute_basic(pd.Series(coeffs))
         features_at_depth_high.columns = [
-            "wav_B_high depth " + str(i + 1) + " " + str(col)
+            "wav_B_high depth_" + str(i + 1) + " " + str(col)
             for col in features_at_depth_high.columns
         ]
         features = pd.concat(
@@ -300,7 +304,7 @@ def compute_features_monthly(
         # name columns
         monthly_features.columns = [
             data.columns[1][:2]
-            + " M "
+            + " M_"
             + str(month + 1)
             + "/"
             + str(observation_length)
@@ -376,7 +380,7 @@ def compute_features_yearly(
         # name columns
         yearly_features.columns = [
             data.columns[1][:2]
-            + " Y "
+            + " Y_"
             + str(year + 1)
             + "/"
             + str(observation_length)
@@ -476,7 +480,8 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2", normalize
         features (pd.DataFrame()) : dataframe with all features for all identifiers.
 
     """
-
+    list_featuretypes = list_featuretypes.copy()
+    
     current = timeit.default_timer()
     transaction_features_monthly = feature_creation_monthly(
         data[["account_id", "date", "transaction"]],
@@ -548,7 +553,9 @@ def create_all_features(data, list_featuretypes, mother_wavelet="db2", normalize
     
     if normalize == True:
         all_features.columns = ["norm " + col for col in all_features.columns]
-
+    else:
+        all_features.columns = ["reg " + col for col in all_features.columns]
+    
     return all_features
 
 

@@ -245,8 +245,13 @@ def count_na(list_of_dfs):
         None
 
     """
+    na_list = []
     for df in list_of_dfs:
-        print(df.isna().sum().sum())
+        na_list.append(df.isna().sum().sum())
+    if sum(na_list) != 0:
+        print(na_list)
+    else:
+        print("\nSuccess\n")
     return
 
 
@@ -332,8 +337,8 @@ def select_features_subset(data, list_subset):
     return data_subset
 
 
-def write_out_list_dfs(list_dfs, location):
-    for item in list_dfs:
-        print("Writing %s" %item)
-        eval("%s" %item).to_csv("personal/results/"+location+"/%s.csv" %item, index=False)
+def write_out_list_dfs(list_names, list_dfs, location):
+    for name, item in zip(list_names,list_dfs):
+        print("Writing %s" %name)
+        eval("%s" %name).to_csv(f"personal/results/{location}/{name}.csv", index=False)
     return

@@ -19,15 +19,15 @@ from spoef.feature_generation import compute_list_featuretypes
 
 #%% For testing functions
 
-data = pd.read_csv("personal/data/data.csv")
-data.date = pd.to_datetime(data.date, format="%y%m%d")
+# data = pd.read_csv("personal/data/data.csv")
+# data.date = pd.to_datetime(data.date, format="%y%m%d")
 
-#%% make test data
-data = data.iloc[0:2000,:]
-# data_acc = data[data.account_id == 1787]
-# data_used = data_acc[["date","balance"]]
-# data = data[data.account_id == 276]
-# data = data[data.account_id == 1843]
+# #%% make test data
+# data = data.iloc[0:2000,:]
+# # data_acc = data[data.account_id == 1787]
+# # data_used = data_acc[["date","balance"]]
+# # data = data[data.account_id == 276]
+# # data = data[data.account_id == 1843]
 #%%
 
 def create_global_transformer_PCA():
@@ -91,7 +91,7 @@ def create_all_features_transformed(data, transform_type, list_featuretypes, mot
         all_features.columns = ["PCA " + col for col in all_features.columns]
     elif transform_type == 'ICA':
         all_features.columns = ["ICA " + col for col in all_features.columns]
-
+    
     return all_features
 
 
@@ -209,8 +209,7 @@ def compute_features_monthly_transformed(
         )
         # name columns
         monthly_features.columns = [
-            data.columns[1][:2]
-            + " M "
+            "xf M_"
             + str(month + 1)
             + "/"
             + str(observation_length)
@@ -258,8 +257,7 @@ def compute_features_yearly_transformed(
         )
         # name columns
         yearly_features.columns = [
-            data.columns[1][:2]
-            + " Y "
+            "xf Y_"
             + str(year + 1)
             + "/"
             + str(observation_length)
@@ -282,7 +280,9 @@ def compute_features_overall_transformed(
 
     # drop identifier column
     data = data.drop(data.columns[0], axis=1)
-
+    
+    list_featuretypes=list_featuretypes.copy()
+    
     if "W" in list_featuretypes:  # W does not work on overall data
         list_featuretypes.remove("W")
 
@@ -303,28 +303,28 @@ def compute_features_overall_transformed(
     )
 
     # name columns
-    features.columns = [data.columns[1][:2] + " O " + col for col in features.columns]
+    features.columns = ["xf O " + col for col in features.columns]
     return features
 
 
 
-#%% PCA
+# #%% PCA
 
-PCA_features = create_all_features_transformed(data, 'PCA', ["B", "F", "W", "W_B"], "db2")
+# PCA_features = create_all_features_transformed(data, 'PCA', ["B", "F", "W", "W_B"], "db2")
 
-#%% Writeout PCA_features
-PCA_features.to_csv("personal/PCA_features.csv")
-#%% Read in PCA_features
-PCA_features = pd.read_csv("personal/PCA_features.csv", index_col="account_id")
-
-
+# #%% Writeout PCA_features
+# PCA_features.to_csv("personal/PCA_features.csv")
+# #%% Read in PCA_features
+# PCA_features = pd.read_csv("personal/PCA_features.csv", index_col="account_id")
 
 
-#%% ICA
 
-ICA_features = create_all_features_transformed(data, 'ICA', ["B", "F", "W", "W_B"], "db2")
 
-#%% Writeout ICA_features
-ICA_features.to_csv("personal/ICA_features.csv")
-#%% Read in ICA_features
-ICA_features = pd.read_csv("personal/ICA_features.csv", index_col="account_id")
+# #%% ICA
+
+# ICA_features = create_all_features_transformed(data, 'ICA', ["B", "F", "W", "W_B"], "db2")
+
+# #%% Writeout ICA_features
+# ICA_features.to_csv("personal/ICA_features.csv")
+# #%% Read in ICA_features
+# ICA_features = pd.read_csv("personal/ICA_features.csv", index_col="account_id")
