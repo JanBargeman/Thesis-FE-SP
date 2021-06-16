@@ -3,7 +3,6 @@ import pandas as pd
 import joblib
 from lightgbm import plot_importance
 
-# import os as os
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.feature_generation import create_all_features
