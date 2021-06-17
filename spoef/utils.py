@@ -32,19 +32,30 @@ def determine_observation_period_monthly(data_date, observation_length):
         end_date (timestamp) : end date for the analysis.
 
     """
-    first_date = data_date.iloc[0]
-    last_date = data_date.iloc[-1]
-    if first_date < last_date - relativedelta(months=observation_length):
-        start_date = last_date.to_period("M").to_timestamp() - relativedelta(
-            months=observation_length - 1
+    last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
+    start_date = last_date.to_period("M").to_timestamp() - relativedelta(
+        months=observation_length - 1
+    )
+    end_date = (
+        last_date.to_period("M").to_timestamp()
+        + relativedelta(months=1)
+        - relativedelta(days=1)
         )
-        end_date = (
-            last_date.to_period("M").to_timestamp()
-            + relativedelta(months=1)
-            - relativedelta(days=1)
-        )
-    else:
-        raise ValueError("data is not full observation length")
+
+
+    # first_date = data_date.iloc[0].to_period('M').to_timestamp() 
+    # last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
+    # if first_date <= last_date - relativedelta(months=observation_length):
+    #     start_date = last_date.to_period("M").to_timestamp() - relativedelta(
+    #         months=observation_length - 1
+    #     )
+    #     end_date = (
+    #         last_date.to_period("M").to_timestamp()
+    #         + relativedelta(months=1)
+    #         - relativedelta(days=1)
+    #     )
+    # else:
+    #     raise ValueError("data is not full observation length")
 
     return start_date, end_date
 
@@ -62,15 +73,21 @@ def determine_observation_period_yearly(data_date, observation_length):
         end_date (timestamp) : end date for the analysis.
 
     """
-    first_date = data_date.iloc[0]
-    last_date = data_date.iloc[-1]
-    if first_date < last_date - relativedelta(years=observation_length):
-        start_date = last_date.to_period("M").to_timestamp() - relativedelta(
-            years=observation_length
-        )
-        end_date = last_date.to_period("M").to_timestamp() - relativedelta(days=1)
-    else:
-        raise ValueError("data is not full observation length")
+    last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
+    start_date = last_date.to_period("M").to_timestamp() - relativedelta(
+        years=observation_length
+    )
+    end_date = last_date.to_period("M").to_timestamp() - relativedelta(days=1)
+        
+    # first_date = data_date.iloc[0].to_period('M').to_timestamp() 
+    # last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
+    # if first_date  <= last_date - relativedelta(years=observation_length):
+    #     start_date = last_date.to_period("M").to_timestamp() - relativedelta(
+    #         years=observation_length
+    #     )
+    #     end_date = last_date.to_period("M").to_timestamp() - relativedelta(days=1)
+    # else:
+    #     raise ValueError("data is not full observation length")
 
     return start_date, end_date
 
@@ -249,7 +266,7 @@ def count_na(list_of_dfs):
     for df in list_of_dfs:
         na_list.append(df.isna().sum().sum())
     if sum(na_list) != 0:
-        print(na_list)
+        print("\nNo success:\n\n", na_list)
     else:
         print("\nSuccess\n")
     return
@@ -267,11 +284,16 @@ def combine_features_dfs(list_of_dfs):
         combined_dfs (pd.DataFrame()) :
 
     """
+    combine_these_dfs = []
+    for df in list_of_dfs:
+        if len(df) > 0:
+            combine_these_dfs.append(df)
+
     combined_dfs = reduce(
         lambda left, right: pd.merge(
             left, right, left_index=True, right_index=True, how="inner"
         ),
-        list_of_dfs,
+        combine_these_dfs,
     )
     return combined_dfs
 
@@ -342,3 +364,95 @@ def write_out_list_dfs(list_names, list_dfs, location):
         print("Writing %s" %name)
         eval("%s" %name).to_csv(f"personal/results/{location}/{name}.csv", index=False)
     return
+
+
+
+#%% quarterly
+    
+
+
+def determine_observation_period_quarterly(data_date, observation_length):
+    """
+    This function determines the desired start and end date for the monthly analysis.
+
+    Args:
+        data_date (pd.DataFrame()) :  dates on which actions occur in datetime format.
+        observation_length (int) : amount of recent months you want for the analysis.
+
+    Returns:
+        start_date (timestamp) : start date for the analysis.
+        end_date (timestamp) : end date for the analysis.
+
+    """
+    last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
+    start_date = last_date.to_period("M").to_timestamp() - relativedelta(
+        months=(3*observation_length) - 1
+    )
+    end_date = (
+        last_date.to_period("M").to_timestamp()
+        + relativedelta(months=1)
+        - relativedelta(days=1)
+    )
+
+        
+    # first_date = data_date.iloc[0].to_period('M').to_timestamp() 
+    # last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
+    # if first_date <= last_date - relativedelta(months=3*observation_length):
+    #     start_date = last_date.to_period("M").to_timestamp() - relativedelta(
+    #         months=(3*observation_length) - 1
+    #     )
+    #     end_date = (
+    #         last_date.to_period("M").to_timestamp()
+    #         + relativedelta(months=1)
+    #         - relativedelta(days=1)
+    #     )
+    # else:
+    #     raise ValueError("data is not full observation length")
+
+    return start_date, end_date
+
+
+
+def prepare_data_quarterly(data, fill_combine_method, observation_length):
+    """
+    This function selects the desired observation length and fills the dataframe.
+    This is done specifically for the monthly analysis. The data is handled
+    differently depending on whether it's transaction or balance data.
+
+    Args:
+        data (pd.DataFrame()) : dataframe with only dates where actions occur.
+        combine_fill_method (str) : 'balance' or 'transaction'.
+        observation_length (int) : amount of recent months you want for the analysis.
+
+    Returns:
+        data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
+
+    """
+    start_date, end_date = determine_observation_period_quarterly(
+        data.iloc[:, 0], observation_length
+    )
+    data_filled = fill_empty_dates(data, fill_combine_method, start_date, end_date)
+    return data_filled
+
+
+def take_last_year(data):
+    first_date = data.date.iloc[0].to_period('M').to_timestamp() 
+    last_date = data.date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1) - relativedelta(days=1)    
+    start_date = last_date - relativedelta(years=1) + relativedelta(days=1)
+    if start_date < first_date:
+        return
+    else:
+        data_sel = data[data.date>start_date]
+    return data_sel
+
+
+def take_last_year2(data):
+    first_date = data.date.iloc[0]
+    last_date = data.date.iloc[-1]
+    start_date = last_date - relativedelta(years=1) + relativedelta(days=1)
+    if start_date < first_date:
+        return
+    else:
+        data_sel = data[data.date>start_date]
+    return data_sel
+

@@ -2,11 +2,12 @@ import os
 import pandas as pd
 import joblib
 from lightgbm import plot_importance
+from dateutil.relativedelta import relativedelta
 
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.feature_generation import create_all_features
-from spoef.utils import combine_features_dfs, select_features_subset
+from spoef.utils import combine_features_dfs, select_features_subset, take_last_year
 from spoef.benchmarking import grid_search_LGBM, grid_search_RF, search_mother_wavelet
 from spoef.transforms import create_all_features_transformed
 from spoef.feature_selection import return_without_column_types, check_transforms, check_balances_transactions, check_feature_types, check_timewindows, check_months_lengths, check_signal_processing_properties
@@ -31,20 +32,40 @@ test = True
 
 #%% Make test data
 
-data = data.iloc[0:2000, :]
+# data = data.iloc[0:2000, :]
 # data = data[data.account_id == 1787]
 # data = data[data.account_id == 276]
-# data = data[data.account_id == 1843]
+data = data[data.account_id == 5180]
+
+#%%
+data = data.groupby('account_id', as_index=False).apply(take_last_year).reset_index(drop=True)
+
+
+
+#%% find which fft2 are most interesting
+list_featuretypes = ['F2']
+mother_wavelet = "db2"
+features_reg = create_all_features(data, list_featuretypes, mother_wavelet, normalize=True)
+
+#%%
+test = features_reg.mean()
+test = test.sort_values()
+
+
 
 
 #%% Generate regular features
-list_featuretypes = ["B", "F", "W", "W_B"]
+# list_featuretypes = ["B", "F", "W", "W_B"]
 mother_wavelet = "db2"
 features_reg = create_all_features(data, list_featuretypes, mother_wavelet)
 
 if save:
     features_reg.to_csv(f"{results_location}/features_reg.csv")
 
+#%%
+    
+    
+test = return_without_column_types(data_all, ["M", "Y", "O"], [2,2,2])
 
 #%%
 # features_reg.to_csv("personal/temp/features_reg.csv")
@@ -122,7 +143,6 @@ fs_data_3 = return_without_column_types(fs_data_2, ["fft", "wavelet", "wav_B"], 
 shap_3, lgbm = check_timewindows(fs_data_3)
 
 fs_data_4 = return_without_column_types(fs_data_3, ["M", "Y"], [2,2])
-
 
 
 #%% 
