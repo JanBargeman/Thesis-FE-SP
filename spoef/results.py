@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import joblib
 from lightgbm import plot_importance
-from dateutil.relativedelta import relativedelta
 
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
@@ -35,27 +34,13 @@ test = True
 # data = data.iloc[0:2000, :]
 # data = data[data.account_id == 1787]
 # data = data[data.account_id == 276]
-data = data[data.account_id == 5180]
+# data = data[data.account_id == 5180]
 
 #%%
 data = data.groupby('account_id', as_index=False).apply(take_last_year).reset_index(drop=True)
 
-
-
-#%% find which fft2 are most interesting
-list_featuretypes = ['F2']
-mother_wavelet = "db2"
-features_reg = create_all_features(data, list_featuretypes, mother_wavelet, normalize=True)
-
-#%%
-test = features_reg.mean()
-test = test.sort_values()
-
-
-
-
 #%% Generate regular features
-# list_featuretypes = ["B", "F", "W", "W_B"]
+list_featuretypes = ["B", "F", "W", "W_B", "F2"]
 mother_wavelet = "db2"
 features_reg = create_all_features(data, list_featuretypes, mother_wavelet)
 
