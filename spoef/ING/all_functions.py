@@ -63,6 +63,7 @@ def compute_list_featuretypes(
     features_fourier = pd.DataFrame()
     features_wavelet = pd.DataFrame()
     features_wavelet_basic = pd.DataFrame()
+    features_fft2 = pd.DataFrame()
     if "B" in list_featuretypes:
         features_basic = compute_basic(data)
         features_basic.columns = [
@@ -844,7 +845,7 @@ def feature_creation_quarterly(
     list_featuretypes=["B"],
     observation_length=4,
     fourier_n_largest_frequencies=10,
-    wavelet_depth=3,
+    wavelet_depth=6,
     mother_wavelet="db2",
 ):
     """
@@ -1890,7 +1891,7 @@ def create_all_features_transformed(data, transform_type, list_featuretypes, mot
 
 
     # current = timeit.default_timer()
-    transaction_features_monthly = feature_creation_monthly_transformed(
+    transaction_features_quarterly = feature_creation_quarterly_transformed(
         data[["account_id", "date", "transaction", "balance"]],
         "account_id",
         "transaction",
@@ -1908,23 +1909,13 @@ def create_all_features_transformed(data, transform_type, list_featuretypes, mot
         mother_wavelet=mother_wavelet,
     )
 
-    # print("yearly:", int(timeit.default_timer() - current), "seconds")
-    # current = timeit.default_timer()  # 228
 
-    transaction_features_overall = feature_creation_overall_transformed(
-        data[["account_id", "date", "transaction", "balance"]],
-        "account_id",
-        "transaction",
-        list_featuretypes,
-        mother_wavelet=mother_wavelet,
-    )
 
     # print("overall:", int(timeit.default_timer() - current), "seconds")  # 533
 
     list_features_dfs = [
-        transaction_features_monthly,
+        transaction_features_quarterly,
         transaction_features_yearly,
-        transaction_features_overall,
     ]
     count_na(list_features_dfs)
 
@@ -1936,33 +1927,6 @@ def create_all_features_transformed(data, transform_type, list_featuretypes, mot
         all_features.columns = ["ICA " + col for col in all_features.columns]
     
     return all_features
-
-
-def feature_creation_monthly_transformed(
-    data,
-    grouper,
-    combine_fill_method,
-    list_featuretypes=["B"],
-    observation_length=12,
-    fourier_n_largest_frequencies=10,
-    wavelet_depth=3,
-    mother_wavelet="db2",
-):
-
-    features = (
-        data.groupby(grouper)
-        .apply(
-            compute_features_monthly_transformed,
-            combine_fill_method=combine_fill_method,
-            list_featuretypes=list_featuretypes,
-            observation_length=observation_length,
-            fourier_n_largest_frequencies=fourier_n_largest_frequencies,
-            wavelet_depth=wavelet_depth,
-            mother_wavelet=mother_wavelet,
-        )
-        .reset_index(level=1, drop=True)
-    )
-    return features
 
 
 
@@ -1992,76 +1956,7 @@ def feature_creation_yearly_transformed(
     return features
 
 
-def feature_creation_overall_transformed(
-    data,
-    grouper,
-    combine_fill_method,
-    list_featuretypes=["B"],
-    fourier_n_largest_frequencies=50,
-    wavelet_depth=5,
-    mother_wavelet="db2",
-):
-    features = (
-        data.groupby(grouper)
-        .apply(
-            compute_features_overall_transformed,
-            combine_fill_method=combine_fill_method,
-            list_featuretypes=list_featuretypes,
-            fourier_n_largest_frequencies=fourier_n_largest_frequencies,
-            wavelet_depth=wavelet_depth,
-            mother_wavelet=mother_wavelet,
-        )
-        .reset_index(level=1, drop=True)
-    )
-    return features
 
-
-def compute_features_monthly_transformed(
-    data,
-    combine_fill_method,
-    list_featuretypes,
-    observation_length,
-    fourier_n_largest_frequencies,
-    wavelet_depth,
-    mother_wavelet,
-):
-    # drop identifier column
-    data = data.drop(data.columns[0], axis=1)
-
-    # select only relevant period and fill the empty date
-    trans_data = prepare_data_monthly(data[["date", "transaction"]], "transaction", observation_length)
-    bal_data = prepare_data_monthly(data[["date", "balance"]], "balance", observation_length)
-    prepared_data = trans_data.merge(bal_data, on="date")
-    
-    start_date = trans_data.iloc[0, 0]
-
-    # create features per month
-    features = pd.DataFrame()
-    for month in range(0, observation_length):
-        data_month = prepared_data[
-            (prepared_data.iloc[:, 0] >= start_date + relativedelta(months=month))
-            & (prepared_data.iloc[:, 0] < start_date + relativedelta(months=month + 1))
-        ]
-        data_transformed = pd.DataFrame(transformer.fit_transform(data_month.iloc[:,[1,2]])).iloc[:,0]
-        monthly_features = compute_list_featuretypes(
-            data_transformed,
-            list_featuretypes,
-            fourier_n_largest_frequencies,
-            wavelet_depth,
-            mother_wavelet,
-        )
-        # name columns
-        monthly_features.columns = [
-            "xf M_"
-            + str(month + 1)
-            + "/"
-            + str(observation_length)
-            + " "
-            + col
-            for col in monthly_features.columns
-        ]
-        features = pd.concat([features, monthly_features], axis=1)
-    return features
 
 def compute_features_yearly_transformed(
     data,
@@ -2112,40 +2007,76 @@ def compute_features_yearly_transformed(
     return features
 
 
-def compute_features_overall_transformed(
+def feature_creation_quarterly_transformed(
+    data,
+    grouper,
+    combine_fill_method,
+    list_featuretypes=["B"],
+    observation_length=4,
+    fourier_n_largest_frequencies=10,
+    wavelet_depth=6,
+    mother_wavelet="db2",
+):
+
+    features = (
+        data.groupby(grouper)
+        .apply(
+            compute_features_quarterly_transformed,
+            combine_fill_method=combine_fill_method,
+            list_featuretypes=list_featuretypes,
+            observation_length=observation_length,
+            fourier_n_largest_frequencies=fourier_n_largest_frequencies,
+            wavelet_depth=wavelet_depth,
+            mother_wavelet=mother_wavelet,
+        )
+        .reset_index(level=1, drop=True)
+    )
+    return features
+
+
+def compute_features_quarterly_transformed(
     data,
     combine_fill_method,
     list_featuretypes,
+    observation_length,
     fourier_n_largest_frequencies,
     wavelet_depth,
     mother_wavelet,
 ):
-
     # drop identifier column
     data = data.drop(data.columns[0], axis=1)
-    
-    list_featuretypes=list_featuretypes.copy()
-    
-    if "W" in list_featuretypes:  # W does not work on overall data
-        list_featuretypes.remove("W")
 
     # select only relevant period and fill the empty date
-    trans_data = prepare_data_overall(data[["date", "transaction"]], "transaction")
-    bal_data = prepare_data_overall(data[["date", "balance"]], "balance")
+    trans_data = prepare_data_quarterly(data[["date", "transaction"]], "transaction", observation_length)
+    bal_data = prepare_data_quarterly(data[["date", "balance"]], "balance", observation_length)
     prepared_data = trans_data.merge(bal_data, on="date")
+    
+    start_date = trans_data.iloc[0, 0]
 
-    data_transformed = pd.DataFrame(transformer.fit_transform(prepared_data.iloc[:,[1,2]])).iloc[:,0]
-
-    # create features overall
-    features = compute_list_featuretypes(
-        data_transformed,
-        list_featuretypes,
-        fourier_n_largest_frequencies,
-        wavelet_depth,
-        mother_wavelet,
-    )
-
-    # name columns
-    features.columns = ["xf O " + col for col in features.columns]
+    # create features per month
+    features = pd.DataFrame()
+    for quarter in range(0, observation_length):
+        data_quarter = prepared_data[
+            (prepared_data.iloc[:, 0] >= start_date + relativedelta(months=3*quarter))
+            & (prepared_data.iloc[:, 0] < start_date + relativedelta(months=3*quarter + 3))
+        ]
+        data_transformed = pd.DataFrame(transformer.fit_transform(data_quarter.iloc[:,[1,2]])).iloc[:,0]
+        quarterly_features = compute_list_featuretypes(
+            data_transformed,
+            list_featuretypes,
+            fourier_n_largest_frequencies,
+            wavelet_depth,
+            mother_wavelet,
+        )
+        # name columns
+        quarterly_features.columns = [
+            "xf M_"
+            + str(quarter + 1)
+            + "/"
+            + str(observation_length)
+            + " "
+            + col
+            for col in quarterly_features.columns
+        ]
+        features = pd.concat([features, quarterly_features], axis=1)
     return features
-

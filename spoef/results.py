@@ -31,13 +31,22 @@ test = True
 
 #%% Make test data
 
-# data = data.iloc[0:2000, :]
+data = data.iloc[0:2000, :]
 # data = data[data.account_id == 1787]
 # data = data[data.account_id == 276]
 # data = data[data.account_id == 5180]
 
 #%%
 data = data.groupby('account_id', as_index=False).apply(take_last_year).reset_index(drop=True)
+
+
+#%%
+
+list_featuretypes = ["F2"]
+base_mother_wavelet = "db2"
+features_PCA = create_all_features_transformed(data, 'PCA', list_featuretypes, base_mother_wavelet)
+
+
 
 #%% Generate regular features
 list_featuretypes = ["B", "F", "W", "W_B", "F2"]
@@ -50,7 +59,6 @@ if save:
 #%%
     
     
-test = return_without_column_types(data_all, ["M", "Y", "O"], [2,2,2])
 
 #%%
 # features_reg.to_csv("personal/temp/features_reg.csv")

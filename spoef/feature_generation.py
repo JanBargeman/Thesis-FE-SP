@@ -76,6 +76,7 @@ def compute_list_featuretypes(
     features_fourier = pd.DataFrame()
     features_wavelet = pd.DataFrame()
     features_wavelet_basic = pd.DataFrame()
+    features_fft2 = pd.DataFrame()
     if "B" in list_featuretypes:
         features_basic = compute_basic(data)
         features_basic.columns = [
@@ -857,7 +858,7 @@ def feature_creation_quarterly(
     list_featuretypes=["B"],
     observation_length=4,
     fourier_n_largest_frequencies=10,
-    wavelet_depth=3,
+    wavelet_depth=6,
     mother_wavelet="db2",
 ):
     """
