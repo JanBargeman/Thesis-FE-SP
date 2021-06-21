@@ -39,15 +39,6 @@ data = data.iloc[0:2000, :]
 #%%
 data = data.groupby('account_id', as_index=False).apply(take_last_year).reset_index(drop=True)
 
-
-#%%
-
-list_featuretypes = ["F2"]
-base_mother_wavelet = "db2"
-features_PCA = create_all_features_transformed(data, 'PCA', list_featuretypes, base_mother_wavelet)
-
-
-
 #%% Generate regular features
 list_featuretypes = ["B", "F", "W", "W_B", "F2"]
 mother_wavelet = "db2"
@@ -55,10 +46,6 @@ features_reg = create_all_features(data, list_featuretypes, mother_wavelet)
 
 if save:
     features_reg.to_csv(f"{results_location}/features_reg.csv")
-
-#%%
-    
-    
 
 #%%
 # features_reg.to_csv("personal/temp/features_reg.csv")
@@ -73,7 +60,6 @@ data_all = combine_features_dfs([status, features_reg])
 # data_all.iloc[[1,5,12,7,37],0] = 1
 base_lgbm_all, auc_list = grid_search_LGBM(data_all)
 # joblib.dump(base_lgbm_all, f"{results_location}/base_lgbm_all.joblib")
-
 
 
 #%% Find optimal mother wavelet with only yearly features
@@ -98,6 +84,13 @@ features_ICA = create_all_features_transformed(data, 'ICA', list_featuretypes, b
 if save:
     write_out_list_dfs(["features_reg", "features_norm", "features_PCA", "features_ICA"], results_location)
 
+
+# #%%
+# features_reg.columns = [col.replace("fft2", "f2") for col in features_reg.columns]    
+# features_norm.columns = [col.replace("fft2", "f2") for col in features_norm.columns]    
+# features_PCA.columns = [col.replace("fft2", "f2") for col in features_PCA.columns]    
+# features_ICA.columns = [col.replace("fft2", "f2") for col in features_ICA.columns]    
+
 #%% Feature selection
 
 features_reg = pd.read_csv(f"{results_location}/features_reg.csv", index_col="account_id")
@@ -108,6 +101,7 @@ features_ICA = pd.read_csv(f"{results_location}/features_ICA.csv", index_col="ac
 
 fs_data = combine_features_dfs([status, features_reg, features_norm, features_PCA, features_ICA])
 
+#%%
 def select_non_default_subset(data, n):
     data_def = data[data.status==1]
     data_non_def = data[data.status==0]
@@ -121,9 +115,11 @@ fs_data = select_non_default_subset(fs_data, 150)
 #     fs_data.iloc[[1,5,12,7,37],0] = 1
 
 
+#%%
+
 shap, lgbm = check_transforms(fs_data, debug=True)
 
-fs_data_1 = return_without_column_types(fs_data, ["ICA"], [0])
+fs_data_1 = return_without_column_types(fs_data, ["PCA", "ICA"], [0,0])
 
 shap_1, lgbm = check_balances_transactions(fs_data_1)
 
@@ -131,11 +127,21 @@ fs_data_2 = return_without_column_types(fs_data_1, ["tr"], [1])
 
 shap_2, lgbm = check_feature_types(fs_data_2, debug=True)
 
-fs_data_3 = return_without_column_types(fs_data_2, ["fft", "wavelet", "wav_B"], [3,3,3])
+fs_data_3 = return_without_column_types(fs_data_2, ["B", "wavelet", "wav_B"], [3,3,3])
 
 shap_3, lgbm = check_timewindows(fs_data_3)
 
-fs_data_4 = return_without_column_types(fs_data_3, ["M", "Y"], [2,2])
+fs_data_4 = return_without_column_types(fs_data_3, ["Y"], [2,2])
+
+
+#%%
+
+test = joblib.load(f"{results_location}/base_lgbm_all.joblib")
+
+X = fs_data_3.iloc[:, 1:].values
+Y = fs_data_3.iloc[:,0].values
+
+test2 = test.fit(X,Y,verbose=True)
 
 
 #%% 

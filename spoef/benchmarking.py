@@ -10,7 +10,7 @@ import os
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.utils import combine_features_dfs, count_na
-from spoef.feature_generation import create_all_features, feature_creation_yearly
+from spoef.feature_generation import feature_creation_yearly
 
 
 
@@ -86,6 +86,7 @@ def grid_search_LGBM(data, test_size=0.4, debug=False):
                                     min_child_samples=min_child_samples,
                                     random_state=0,
                                     scale_pos_weight=scale_pos_weight,
+                                    n_jobs=8,
                                 )                    
                                 
                                 auc_list=[]
@@ -170,7 +171,7 @@ def grid_search_RF(data, test_size=0.4, debug=False):
         for max_depth in list_max_depth:
             i = i + 1
             rf = RandomForestClassifier(
-                n_estimators=n_trees, max_depth=max_depth, random_state=0
+                n_estimators=n_trees, max_depth=max_depth, random_state=0, n_jobs=8,
             )
             rf.fit(X_train, y_train)
             current_params = [n_trees, max_depth]

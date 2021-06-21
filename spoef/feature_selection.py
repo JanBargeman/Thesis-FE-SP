@@ -223,13 +223,11 @@ def check_timewindows(data):
     
     best_lgbm, auc_list, explainer = grid_search_LGBM(data)
     
-    data_wo_months = return_without_column_types(data, ["M"], [2]) 
+    data_wo_quarters = return_without_column_types(data, ["Q"], [2]) 
     data_wo_years = return_without_column_types(data, ["Y"], [2])
-    data_wo_overall = return_without_column_types(data, ["O"], [2])
     
-    assess_5x2cv(data, data_wo_months, best_lgbm, best_lgbm)
+    assess_5x2cv(data, data_wo_quarters, best_lgbm, best_lgbm)
     assess_5x2cv(data, data_wo_years, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_overall, best_lgbm, best_lgbm)
     
     return explainer, best_lgbm
 
@@ -242,11 +240,13 @@ def check_feature_types(data, debug=False):
         
     data_wo_Basic = return_without_column_types(data, ["B"], [3]) # 0.9657 -> 0.8759
     data_wo_Fourier = return_without_column_types(data, ["fft"], [3])
+    data_wo_Fourier2 = return_without_column_types(data, ["f2"], [3])
     data_wo_Wavelet = return_without_column_types(data, ["wavelet"], [3])
     data_wo_Wav_Basic = return_without_column_types(data, ["wav_B"], [3])
     
     assess_5x2cv(data, data_wo_Basic, best_lgbm, best_lgbm)
     assess_5x2cv(data, data_wo_Fourier, best_lgbm, best_lgbm)
+    assess_5x2cv(data, data_wo_Fourier2, best_lgbm, best_lgbm)
     assess_5x2cv(data, data_wo_Wavelet, best_lgbm, best_lgbm)    
     assess_5x2cv(data, data_wo_Wav_Basic, best_lgbm, best_lgbm)
     

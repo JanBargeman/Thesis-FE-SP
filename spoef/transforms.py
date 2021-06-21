@@ -169,7 +169,7 @@ def feature_creation_quarterly_transformed(
     list_featuretypes=["B"],
     observation_length=4,
     fourier_n_largest_frequencies=10,
-    wavelet_depth=6,
+    wavelet_depth=4,
     mother_wavelet="db2",
 ):
 

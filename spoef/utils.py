@@ -19,46 +19,6 @@ os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 # # data = data[data.account_id == 1843]
 
 #%%
-def determine_observation_period_monthly(data_date, observation_length):
-    """
-    This function determines the desired start and end date for the monthly analysis.
-
-    Args:
-        data_date (pd.DataFrame()) :  dates on which actions occur in datetime format.
-        observation_length (int) : amount of recent months you want for the analysis.
-
-    Returns:
-        start_date (timestamp) : start date for the analysis.
-        end_date (timestamp) : end date for the analysis.
-
-    """
-    last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
-    start_date = last_date.to_period("M").to_timestamp() - relativedelta(
-        months=observation_length - 1
-    )
-    end_date = (
-        last_date.to_period("M").to_timestamp()
-        + relativedelta(months=1)
-        - relativedelta(days=1)
-        )
-
-
-    # first_date = data_date.iloc[0].to_period('M').to_timestamp() 
-    # last_date = data_date.iloc[-1].to_period('M').to_timestamp() + relativedelta(months=1)
-    # if first_date <= last_date - relativedelta(months=observation_length):
-    #     start_date = last_date.to_period("M").to_timestamp() - relativedelta(
-    #         months=observation_length - 1
-    #     )
-    #     end_date = (
-    #         last_date.to_period("M").to_timestamp()
-    #         + relativedelta(months=1)
-    #         - relativedelta(days=1)
-    #     )
-    # else:
-    #     raise ValueError("data is not full observation length")
-
-    return start_date, end_date
-
 
 def determine_observation_period_yearly(data_date, observation_length):
     """
@@ -185,27 +145,6 @@ def fill_empty_dates(data, combine_fill_method, start_date, end_date):
     return data_filled
 
 
-def prepare_data_monthly(data, fill_combine_method, observation_length):
-    """
-    This function selects the desired observation length and fills the dataframe.
-    This is done specifically for the monthly analysis. The data is handled
-    differently depending on whether it's transaction or balance data.
-
-    Args:
-        data (pd.DataFrame()) : dataframe with only dates where actions occur.
-        combine_fill_method (str) : 'balance' or 'transaction'.
-        observation_length (int) : amount of recent months you want for the analysis.
-
-    Returns:
-        data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
-
-    """
-    start_date, end_date = determine_observation_period_monthly(
-        data.iloc[:, 0], observation_length
-    )
-    data_filled = fill_empty_dates(data, fill_combine_method, start_date, end_date)
-    return data_filled
-
 
 def prepare_data_yearly(data, fill_combine_method, observation_length):
     """
@@ -228,25 +167,6 @@ def prepare_data_yearly(data, fill_combine_method, observation_length):
     data_filled = fill_empty_dates(data, fill_combine_method, start_date, end_date)
     return data_filled
 
-
-def prepare_data_overall(data, fill_combine_method):
-    """
-    This function selects the desired observation length and fills the dataframe.
-    This is done specifically for the overall analysis. The data is handled
-    differently depending on whether it's transaction or balance data.
-
-    Args:
-        data (pd.DataFrame()) : dataframe with only dates where actions occur.
-        combine_fill_method (str) : 'balance' or 'transaction'.
-
-    Returns:
-        data_filled (pd.DataFrame()) : filled dataframe with length of observation period.
-
-    """
-    data_filled = fill_empty_dates(
-        data, fill_combine_method, data.iloc[0, 0], data.iloc[-1, 0]
-    )
-    return data_filled
 
 
 def count_na(list_of_dfs):
@@ -445,14 +365,4 @@ def take_last_year(data):
         data_sel = data[data.date>start_date]
     return data_sel
 
-
-def take_last_year2(data):
-    first_date = data.date.iloc[0]
-    last_date = data.date.iloc[-1]
-    start_date = last_date - relativedelta(years=1) + relativedelta(days=1)
-    if start_date < first_date:
-        return
-    else:
-        data_sel = data[data.date>start_date]
-    return data_sel
 
