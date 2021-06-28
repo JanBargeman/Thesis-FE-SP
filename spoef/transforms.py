@@ -225,7 +225,7 @@ def compute_features_quarterly_transformed(
         )
         # name columns
         quarterly_features.columns = [
-            "xf M_"
+            "xf Q_"
             + str(quarter + 1)
             + "/"
             + str(observation_length)

@@ -1,7 +1,9 @@
 import os
 import pandas as pd
 import joblib
-from lightgbm import plot_importance
+from lightgbm import plot_importance, LGBMClassifier
+
+from probatus.feature_elimination import ShapRFECV
 
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
@@ -9,7 +11,7 @@ from spoef.feature_generation import create_all_features
 from spoef.utils import combine_features_dfs, select_features_subset, take_last_year
 from spoef.benchmarking import grid_search_LGBM, grid_search_RF, search_mother_wavelet
 from spoef.transforms import create_all_features_transformed
-from spoef.feature_selection import return_without_column_types, check_transforms, check_balances_transactions, check_feature_types, check_timewindows, check_months_lengths, check_signal_processing_properties
+from spoef.feature_selection import return_without_column_types, check_transforms, check_balances_transactions, check_feature_types, check_timewindows, check_months_lengths, check_signal_processing_properties, assess_5x2cv
 
 def write_out_list_dfs(list_dfs, location):
     for item in list_dfs:
@@ -17,6 +19,8 @@ def write_out_list_dfs(list_dfs, location):
         eval("%s" %item).to_csv(f"{location}/{item}.csv")
     return
 
+# pd.set_option("display.max_rows", 20, "display.max_columns", None)
+# pd.reset_option("display.max_rows", "display.max_columns")
 
 #%% Read in data
 
@@ -109,48 +113,83 @@ def select_non_default_subset(data, n):
     data_subset = pd.concat([data_def, data_subset_non_def], axis=0)    
     return data_subset
     
-fs_data = select_non_default_subset(fs_data, 150)
+fs_data = select_non_default_subset(fs_data, 100)
 
 # if test:
 #     fs_data.iloc[[1,5,12,7,37],0] = 1
 
 
-#%%
+#%% FS ON ALL FEATURES
 
-shap, lgbm = check_transforms(fs_data, debug=True)
-
-fs_data_1 = return_without_column_types(fs_data, ["PCA", "ICA"], [0,0])
+shap, lgbm = check_transforms(fs_data)
+fs_data_1 = return_without_column_types(fs_data, ["PCA", "ICA", "norm"], [0,0,0])
 
 shap_1, lgbm = check_balances_transactions(fs_data_1)
-
 fs_data_2 = return_without_column_types(fs_data_1, ["tr"], [1])
 
-shap_2, lgbm = check_feature_types(fs_data_2, debug=True)
+shap_2, lgbm = check_feature_types(fs_data_2)
+fs_data_3_1 = return_without_column_types(fs_data_2, ["wavelet"], [3])
 
-fs_data_3 = return_without_column_types(fs_data_2, ["B", "wavelet", "wav_B"], [3,3,3])
+shap_2, lgbm = check_feature_types(fs_data_3_1)
+fs_data_3_2 = return_without_column_types(fs_data_3_1, ["f2"], [3])
+
+shap_2, lgbm = check_feature_types(fs_data_3_2)
+fs_data_3 = return_without_column_types(fs_data_2, ["fft", "f2", "wavelet"], [3,3,3])
 
 shap_3, lgbm = check_timewindows(fs_data_3)
+fs_data_4 = return_without_column_types(fs_data_3, ["Q"], [2])
 
-fs_data_4 = return_without_column_types(fs_data_3, ["Y"], [2,2])
+fs_data_final = fs_data_4
 
+#%% FS ON B FEATURES
 
-#%%
-
-test = joblib.load(f"{results_location}/base_lgbm_all.joblib")
-
-X = fs_data_3.iloc[:, 1:].values
-Y = fs_data_3.iloc[:,0].values
-
-test2 = test.fit(X,Y,verbose=True)
+fs_data_B = return_without_column_types(fs_data, ["fft", "f2", "wavelet", "wav_B"], [3,3,3,3])
 
 
-#%% 
-check_months_lengths(fs_data_4)
-fs_data = reduce_months(fs_data)
-check_signal_processing_properties(fs_data)
-fs_data = reduce_n_largest(fs_data)
-fs_data = reduce_wavelet_depth(fs_data)
-fs_data = reduce_wav_B_depth(fs_data)
+shap, lgbm = check_transforms(fs_data_B)
+
+fs_data_B_1_1 = return_without_column_types(fs_data_B, ["PCA"], [0])
+shap, lgbm = check_transforms(fs_data_B_1_1)
+
+fs_data_B_1_2 = return_without_column_types(fs_data_B_1_1, ["ICA"], [0])
+shap, lgbm = check_transforms(fs_data_B_1_2)
+
+fs_data_B_1 = return_without_column_types(fs_data_B, ["norm", "PCA", "ICA"], [0,0,0])
+
+shap_1, lgbm = check_balances_transactions(fs_data_B_1)
+fs_data_B_2 = return_without_column_types(fs_data_B_1, ["tr"], [1])
+
+shap_3, lgbm = check_timewindows(fs_data_B_2)
+fs_data_B_3 = return_without_column_types(fs_data_B_2, ["Q"], [2])
+
+fs_data_B_final = fs_data_B_3
+
+#%% FS ON SP FEATURES
+
+fs_data_SP = return_without_column_types(fs_data, ["B"], [3,3,3])
+
+
+shap, lgbm = check_transforms(fs_data_SP)
+fs_data_SP_1 = return_without_column_types(fs_data_SP, ["norm", "PCA", "ICA"], [0,0,0])
+
+shap_1, lgbm = check_balances_transactions(fs_data_SP_1)
+fs_data_SP_2 = return_without_column_types(fs_data_SP_1, ["tr"], [1])
+
+shap_2, lgbm = check_feature_types(fs_data_SP_2)
+fs_data_SP_3_int = return_without_column_types(fs_data_SP_2, ["wavelet"], [3])
+
+shap_2, lgbm = check_feature_types(fs_data_SP_3_int)
+fs_data_SP_3_int = return_without_column_types(fs_data_SP_3_int, ["f2"], [3])
+
+shap_2, lgbm = check_feature_types(fs_data_SP_3_int)
+fs_data_SP_3 = return_without_column_types(fs_data_SP_2, ["fft", "f2", "wavelet"], [3,3,3])
+
+shap_3, lgbm = check_timewindows(fs_data_SP_3)
+fs_data_SP_4 = return_without_column_types(fs_data_SP_3, ["Y"], [2,2])
+
+fs_data_SP_final = fs_data_SP_3
+
+
 
 #%% Feature importances
 # 
@@ -174,19 +213,63 @@ test = shap.force_plot(shap_2.expected_value[0], shap_2(X).values[0])
 
 
 
-from spoef.feature_selection import return_without_column_types, check_transforms, check_balances_transactions, check_feature_types, check_timewindows, check_months_lengths, check_signal_processing_properties
 
 
 
+#%% SHAP
+
+data_SHAP = fs_data
+
+lgbm = LGBMClassifier(
+                    objective="binary",
+                    n_estimators=200,
+                    max_depth=6,
+                    num_leaves=20,
+                    learning_rate=0.1,
+                    random_state=0,
+                    # is_unbalance=True,
+                ) 
+
+shap_elim = ShapRFECV(lgbm, step=0.2, cv=5, scoring='roc_auc', n_jobs=1)
+
+y = data_SHAP.iloc[:, 0].values
+X = data_SHAP.iloc[:, 1:].values
+
+report = shap_elim.fit_compute(X,y, check_additivity=False)
+
+performance_plot = shap_elim.plot()
 
 
+#%%
+set_of_feats = shap_elim.get_reduced_features_set(num_features=8)
+pd_feat_names = pd.Series(data_SHAP.columns[set_of_feats])
+
+def count_occurences_features(pd_feat_names):
+    pd_split = pd_feat_names.str.split(" ", expand=True)
+    for col in pd_split.columns:
+        print(pd_split[col].value_counts(), "\n")
+    return
+
+count_occurences_features(pd_feat_names)
+
+#%%
 
 
+#%%
 
-
-
+shap_elimination.get_reduced_features_set(num_features=8)
 
 #%% Performance comparison
+
+# gridsearch for B, SP, all feature sets
+
+lgbm_B, auc_list, explainer = grid_search_LGBM(fs_data_B_final)
+lgbm_SP, auc_list, explainer = grid_search_LGBM(fs_data_SP_final)
+lgbm, auc_list, explainer = grid_search_LGBM(fs_data_final)
+
+assess_5x2cv(fs_data_B_final, fs_data_SP_final, lgbm_B, lgbm_SP)
+assess_5x2cv(fs_data_B_final, fs_data_final, lgbm_B, lgbm)
+assess_5x2cv(fs_data_final, fs_data_SP_final, lgbm, lgbm_SP)
 
 
 

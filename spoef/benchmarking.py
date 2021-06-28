@@ -97,7 +97,7 @@ def grid_search_LGBM(data, test_size=0.4, debug=False):
                                     y_train, y_valid = Y[train_index], Y[test_index]              
                                     
             
-                                    lgbm.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], eval_metric="AUC", verbose=1000, early_stopping_rounds=50)
+                                    lgbm.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], eval_metric="AUC", verbose=False, early_stopping_rounds=50)
                                     
                                     current_params = [n_est, max_depth, num_leaves, learn_rate, scale_pos_weight]
                                     AUC_score = roc_auc_score(
