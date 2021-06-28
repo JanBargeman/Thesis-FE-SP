@@ -11,9 +11,7 @@ from sklearn.decomposition import PCA, FastICA
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix
 from lightgbm import LGBMClassifier
-from lightgbm import plot_importance
 import matplotlib.pyplot as plt
-import shap
 from functools import reduce
 import scipy.signal  # .stft #.argrelmax  for finding max in plots or smth
 import scipy.fft
@@ -21,6 +19,43 @@ import numpy as np
 import pywt
 import timeit
 
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from probatus.feature_elimination import ShapRFECV
+from sklearn.linear_model import LogisticRegression
+
+def gridsearchLGBM(data, cv=3):
+    y = data.iloc[:, 0]
+    X = data.iloc[:, 1:]
+    
+    parameters = {
+        'n_estimators':[20, 50],
+        'max_depth':[3,6],
+        'num_leaves':[20],
+        'learning_rate':[0.1, 0.3],
+        'max_bin':[63],
+        'min_child_samples':[20],
+        'scale_pos_weight':[1.0, 3.0],
+        }
+    lgbm = LGBMClassifier()
+    clf = GridSearchCV(lgbm, parameters, scoring='roc_auc', n_jobs=1, cv=cv)
+    clf.fit(X,y)
+    
+    return clf.best_estimator_
+
+
+def gridsearchRF(data, cv=3):
+    y = data.iloc[:, 0]
+    X = data.iloc[:, 1:]
+    
+    parameters = {
+        'n_estimators':[50, 100, 500],
+        'max_depth':[3, 6],
+        }
+    rf = RandomForestClassifier()
+    clf = GridSearchCV(rf, parameters, scoring='roc_auc', n_jobs=1, cv=cv)
+    clf.fit(X,y)
+    
+    return clf.best_estimator_
 
 def grid_search_LGBM(data, test_size=0.4, debug=False):
     """
@@ -105,7 +140,7 @@ def grid_search_LGBM(data, test_size=0.4, debug=False):
                                     y_train, y_valid = Y[train_index], Y[test_index]              
                                     
             
-                                    lgbm.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], eval_metric="AUC", verbose=1000, early_stopping_rounds=50)
+                                    lgbm.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], eval_metric="AUC", verbose=False, early_stopping_rounds=50)
                                     
                                     current_params = [n_est, max_depth, num_leaves, learn_rate, scale_pos_weight]
                                     AUC_score = roc_auc_score(
@@ -139,11 +174,8 @@ def grid_search_LGBM(data, test_size=0.4, debug=False):
     plt.hist(AUC_score_avg_list)
     plt.show()
     print("\nMean AUC: " + str(sum(AUC_score_avg_list)/len(AUC_score_avg_list)))
-    
-    explainer = shap.Explainer(base_LGBM)
-    plot_importance(base_LGBM)
-    
-    return base_LGBM, AUC_score_avg_list, explainer
+        
+    return base_LGBM, AUC_score_avg_list
 
 
 def grid_search_RF(data, test_size=0.4, debug=False):
@@ -322,6 +354,63 @@ def search_mother_wavelet(data, status, base_lgbm_all, list_mother_wavelets, tes
     plt.show()
     return avg_auc_list
 
+
+def shap_fs(data, classifier_type, step=0.2, cv=5, scoring='roc_auc', n_iter=5):
+    
+    if classifier_type == 'LGBM':
+        classifier = LGBMClassifier(
+                        objective="binary",
+                        n_estimators=30, # 5000
+                        max_depth=3, # 6
+                        num_leaves=20,
+                        learning_rate=0.1,
+                        random_state=0,
+                        scale_pos_weight=1.0,
+                        # is_unbalance=True,
+                    )
+        
+    elif classifier_type == 'LGBM_cv':
+        parameters = {
+            'n_estimators':[5000, 10000],
+            'max_depth':[6],
+            'num_leaves':[20],
+            'learning_rate':[0.1, 0.3],
+            'max_bin':[63],
+            'min_child_samples':[20],
+            'scale_pos_weight':[1.0, 3.0],
+            }
+        clf = LGBMClassifier(objective='binary')
+        classifier = RandomizedSearchCV(clf, parameters, scoring='roc_auc', n_jobs=1, cv=cv, n_iter=n_iter)
+        
+    elif classifier_type == 'RF':
+        classifier = RandomForestClassifier()
+        
+    elif classifier_type == 'RF_cv':
+        parameters = {
+            'n_estimators':[5000, 10000],
+            'max_depth':[6],
+            }
+        clf = RandomForestClassifier()
+        classifier = RandomizedSearchCV(clf, parameters, scoring='roc_auc', n_jobs=1, cv=cv, n_iter=n_iter)
+        
+    elif classifier_type == 'LR':
+        classifier = LogisticRegression()
+        
+    else:
+        raise ValueError('classifier_type should be one of "LGBM", "RF" or "LR"')
+    
+    shap_elim = ShapRFECV(classifier, step=step, cv=cv, scoring=scoring, n_jobs=1)
+    
+    y = data.iloc[:, 0]
+    X = data.iloc[:, 1:]
+    
+    report = shap_elim.fit_compute(X,y, check_additivity=False)
+    
+    performance_plot = shap_elim.plot()
+
+        
+    return shap_elim
+
 def assess_5x2cv(dataset1, dataset2, model1, model2):
     
     mean1, stdev1 = perform_5x2cv(dataset1, model1)
@@ -429,12 +518,6 @@ def calc_contingency_table(valid, pred1, pred2):
 
     return a,b,c,d   
 
-def feat_importance_RF(dataset, model):
-    return
-
-def feat_importance_LGBM(dataset, model):
-    return
-
 
 def perform_5x2cv(data, model):
 
@@ -466,106 +549,6 @@ def perform_5x2cv(data, model):
     
     return mean, stdev
 
-def select_time_window_subset(data, time_window_list):
-    return
-
-def select_transforms_subset(data, transforms_list):
-    return
-
-
-def return_without_column_types(data, string_list, index_list):
-    data = data.copy()
-    for string, index in zip(string_list, index_list):
-        data = data[["status"]+[col for col in data.columns[1:] if not col.split(" ")[index].startswith(string)]]
-    return data
-
-
-def check_transforms(data, debug=False):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data, debug=debug)
-    
-    data_wo_reg = return_without_column_types(data, ["reg"], [0])
-    data_wo_norm = return_without_column_types(data, ["norm"], [0])
-    data_wo_PCA = return_without_column_types(data, ["PCA"], [0])
-    data_wo_ICA = return_without_column_types(data, ["ICA"], [0])
-    
-    assess_5x2cv(data, data_wo_reg, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_norm, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_PCA, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_ICA, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-def check_balances_transactions(data):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data)
-
-    data_wo_balances = return_without_column_types(data, ["ba"], [1])
-    data_wo_transactions = return_without_column_types(data, ["tr"], [1])
-    
-    assess_5x2cv(data, data_wo_balances, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_transactions, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-def check_timewindows(data):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data)
-    
-    data_wo_quarters = return_without_column_types(data, ["Q"], [2]) 
-    data_wo_years = return_without_column_types(data, ["Y"], [2])
-    
-    assess_5x2cv(data, data_wo_quarters, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_years, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-
-
-def check_feature_types(data, debug=False):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data, debug=debug)
-        
-    data_wo_Basic = return_without_column_types(data, ["B"], [3]) # 0.9657 -> 0.8759
-    data_wo_Fourier = return_without_column_types(data, ["fft"], [3])
-    data_wo_Fourier2 = return_without_column_types(data, ["f2"], [3])
-    data_wo_Wavelet = return_without_column_types(data, ["wavelet"], [3])
-    data_wo_Wav_Basic = return_without_column_types(data, ["wav_B"], [3])
-    
-    assess_5x2cv(data, data_wo_Basic, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_Fourier, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_Fourier2, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_Wavelet, best_lgbm, best_lgbm)    
-    assess_5x2cv(data, data_wo_Wav_Basic, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-def check_signal_processing_properties(data):
-    data = data.copy()
-    
-    best_lgbm, auc_list = grid_search_LGBM(data)
-
-    
-    return
-
-def check_months_lengths(data):
-    data = data.copy()
-    data_compare = data.copy()
-    
-    best_lgbm, auc_list = grid_search_LGBM(data)
-    
-    
-    for i in [12,11,10,9,8,7,6,5,4,3,2,1]:
-        data = return_without_column_types(data, "M_"+[str(i)+"/12"], [2])
-        assess_5x2cv(data_compare, data, best_lgbm, best_lgbm)
-    
-    return
-  
-    
 
 def create_global_transformer_PCA():
     global transformer 
@@ -763,7 +746,7 @@ def compute_features_quarterly_transformed(
         )
         # name columns
         quarterly_features.columns = [
-            "xf M_"
+            "xf Q_"
             + str(quarter + 1)
             + "/"
             + str(observation_length)
@@ -773,6 +756,37 @@ def compute_features_quarterly_transformed(
         ]
         features = pd.concat([features, quarterly_features], axis=1)
     return features
+# #%% PCA
+
+# PCA_features = create_all_features_transformed(data, 'PCA', ["B", "F", "W", "W_B"], "db2")
+
+# #%% Writeout PCA_features
+# PCA_features.to_csv("personal/PCA_features.csv")
+# #%% Read in PCA_features
+# PCA_features = pd.read_csv("personal/PCA_features.csv", index_col="account_id")
+
+
+
+
+# #%% ICA
+
+# ICA_features = create_all_features_transformed(data, 'ICA', ["B", "F", "W", "W_B"], "db2")
+
+# #%% Writeout ICA_features
+# ICA_features.to_csv("personal/ICA_features.csv")
+# #%% Read in ICA_features
+# ICA_features = pd.read_csv("personal/ICA_features.csv", index_col="account_id")
+    
+def get_reduced_data(data, set_of_feats):
+    set_of_feats = [i + 1 for i in set_of_feats]
+    set_of_feats.insert(0,0)
+    return data.iloc[:,set_of_feats]
+
+def count_occurences_features(pd_feat_names):
+    pd_split = pd.Series(pd_feat_names).str.split(" ", expand=True)
+    for col in pd_split.columns:
+        print(pd_split[col].value_counts(), "\n")
+    return
 
 
 def determine_observation_period_yearly(data_date, observation_length):
@@ -1119,6 +1133,7 @@ def take_last_year(data):
     else:
         data_sel = data[data.date>start_date]
     return data_sel
+
 
 
 def compute_list_featuretypes(

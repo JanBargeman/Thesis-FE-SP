@@ -1,18 +1,49 @@
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import confusion_matrix, roc_auc_score
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, GridSearchCV
 from lightgbm import LGBMClassifier
-from lightgbm import plot_importance
 import matplotlib.pyplot as plt
-import shap
 import os
+
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.utils import combine_features_dfs, count_na
 from spoef.feature_generation import feature_creation_yearly
 
+def gridsearchLGBM(data, cv=3):
+    y = data.iloc[:, 0]
+    X = data.iloc[:, 1:]
+    
+    parameters = {
+        'n_estimators':[20, 50],
+        'max_depth':[3,6],
+        'num_leaves':[20],
+        'learning_rate':[0.1, 0.3],
+        'max_bin':[63],
+        'min_child_samples':[20],
+        'scale_pos_weight':[1.0, 3.0],
+        }
+    lgbm = LGBMClassifier()
+    clf = GridSearchCV(lgbm, parameters, scoring='roc_auc', n_jobs=1, cv=cv)
+    clf.fit(X,y)
+    
+    return clf.best_estimator_
 
+
+def gridsearchRF(data, cv=3):
+    y = data.iloc[:, 0]
+    X = data.iloc[:, 1:]
+    
+    parameters = {
+        'n_estimators':[50, 100, 500],
+        'max_depth':[3, 6],
+        }
+    rf = RandomForestClassifier()
+    clf = GridSearchCV(rf, parameters, scoring='roc_auc', n_jobs=1, cv=cv)
+    clf.fit(X,y)
+    
+    return clf.best_estimator_
 
 def grid_search_LGBM(data, test_size=0.4, debug=False):
     """
@@ -131,11 +162,8 @@ def grid_search_LGBM(data, test_size=0.4, debug=False):
     plt.hist(AUC_score_avg_list)
     plt.show()
     print("\nMean AUC: " + str(sum(AUC_score_avg_list)/len(AUC_score_avg_list)))
-    
-    explainer = shap.Explainer(base_LGBM)
-    plot_importance(base_LGBM)
-    
-    return base_LGBM, AUC_score_avg_list, explainer
+        
+    return base_LGBM, AUC_score_avg_list
 
 
 def grid_search_RF(data, test_size=0.4, debug=False):

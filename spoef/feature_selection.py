@@ -9,6 +9,13 @@ from spoef.benchmarking import grid_search_LGBM, grid_search_RF, search_mother_w
 import joblib
 import pandas as pd
 import os
+from lightgbm import LGBMClassifier
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+from probatus.feature_elimination import ShapRFECV
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+
+
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 
@@ -30,6 +37,63 @@ os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 
 #%%
+
+def shap_fs(data, classifier_type, step=0.2, cv=5, scoring='roc_auc', n_iter=5):
+    
+    if classifier_type == 'LGBM':
+        classifier = LGBMClassifier(
+                        objective="binary",
+                        n_estimators=30, # 5000
+                        max_depth=3, # 6
+                        num_leaves=20,
+                        learning_rate=0.1,
+                        random_state=0,
+                        scale_pos_weight=1.0,
+                        # is_unbalance=True,
+                    )
+        
+    elif classifier_type == 'LGBM_cv':
+        parameters = {
+            'n_estimators':[5000, 10000],
+            'max_depth':[6],
+            'num_leaves':[20],
+            'learning_rate':[0.1, 0.3],
+            'max_bin':[63],
+            'min_child_samples':[20],
+            'scale_pos_weight':[1.0, 3.0],
+            }
+        clf = LGBMClassifier(objective='binary')
+        classifier = RandomizedSearchCV(clf, parameters, scoring='roc_auc', n_jobs=1, cv=cv, n_iter=n_iter)
+        
+    elif classifier_type == 'RF':
+        classifier = RandomForestClassifier()
+        
+    elif classifier_type == 'RF_cv':
+        parameters = {
+            'n_estimators':[5000, 10000],
+            'max_depth':[6],
+            }
+        clf = RandomForestClassifier()
+        classifier = RandomizedSearchCV(clf, parameters, scoring='roc_auc', n_jobs=1, cv=cv, n_iter=n_iter)
+        
+    elif classifier_type == 'LR':
+        classifier = LogisticRegression()
+        
+    else:
+        raise ValueError('classifier_type should be one of "LGBM", "RF" or "LR"')
+    
+    shap_elim = ShapRFECV(classifier, step=step, cv=cv, scoring=scoring, n_jobs=1)
+    
+    y = data.iloc[:, 0]
+    X = data.iloc[:, 1:]
+    
+    report = shap_elim.fit_compute(X,y, check_additivity=False)
+    
+    performance_plot = shap_elim.plot()
+
+        
+    return shap_elim
+
 def assess_5x2cv(dataset1, dataset2, model1, model2):
     
     mean1, stdev1 = perform_5x2cv(dataset1, model1)
@@ -137,12 +201,6 @@ def calc_contingency_table(valid, pred1, pred2):
 
     return a,b,c,d   
 
-def feat_importance_RF(dataset, model):
-    return
-
-def feat_importance_LGBM(dataset, model):
-    return
-
 
 def perform_5x2cv(data, model):
 
@@ -173,143 +231,3 @@ def perform_5x2cv(data, model):
     # print("Mean (std): " + str(mean) + " (" + str(stdev) + ")")
     
     return mean, stdev
-
-def select_time_window_subset(data, time_window_list):
-    return
-
-def select_transforms_subset(data, transforms_list):
-    return
-
-
-def return_without_column_types(data, string_list, index_list):
-    data = data.copy()
-    for string, index in zip(string_list, index_list):
-        data = data[["status"]+[col for col in data.columns[1:] if not col.split(" ")[index].startswith(string)]]
-    return data
-
-
-def check_transforms(data, debug=False):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data, debug=debug)
-    
-    data_wo_reg = return_without_column_types(data, ["reg"], [0])
-    data_wo_norm = return_without_column_types(data, ["norm"], [0])
-    data_wo_PCA = return_without_column_types(data, ["PCA"], [0])
-    data_wo_ICA = return_without_column_types(data, ["ICA"], [0])
-    
-    assess_5x2cv(data, data_wo_reg, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_norm, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_PCA, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_ICA, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-def check_balances_transactions(data):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data)
-
-    data_wo_balances = return_without_column_types(data, ["ba"], [1])
-    data_wo_transactions = return_without_column_types(data, ["tr"], [1])
-    
-    assess_5x2cv(data, data_wo_balances, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_transactions, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-def check_timewindows(data):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data)
-    
-    data_wo_quarters = return_without_column_types(data, ["Q"], [2]) 
-    data_wo_years = return_without_column_types(data, ["Y"], [2])
-    
-    assess_5x2cv(data, data_wo_quarters, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_years, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-
-
-def check_feature_types(data, debug=False):
-    data = data.copy()
-    
-    best_lgbm, auc_list, explainer = grid_search_LGBM(data, debug=debug)
-        
-    data_wo_Basic = return_without_column_types(data, ["B"], [3]) # 0.9657 -> 0.8759
-    data_wo_Fourier = return_without_column_types(data, ["fft"], [3])
-    data_wo_Fourier2 = return_without_column_types(data, ["f2"], [3])
-    data_wo_Wavelet = return_without_column_types(data, ["wavelet"], [3])
-    data_wo_Wav_Basic = return_without_column_types(data, ["wav_B"], [3])
-    
-    assess_5x2cv(data, data_wo_Basic, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_Fourier, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_Fourier2, best_lgbm, best_lgbm)
-    assess_5x2cv(data, data_wo_Wavelet, best_lgbm, best_lgbm)    
-    assess_5x2cv(data, data_wo_Wav_Basic, best_lgbm, best_lgbm)
-    
-    return explainer, best_lgbm
-
-def check_signal_processing_properties(data):
-    data = data.copy()
-    
-    best_lgbm, auc_list = grid_search_LGBM(data)
-
-    
-    return
-
-def check_months_lengths(data):
-    data = data.copy()
-    data_compare = data.copy()
-    
-    best_lgbm, auc_list = grid_search_LGBM(data)
-    
-    
-    for i in [12,11,10,9,8,7,6,5,4,3,2,1]:
-        data = return_without_column_types(data, "M_"+[str(i)+"/12"], [2])
-        assess_5x2cv(data_compare, data, best_lgbm, best_lgbm)
-    
-    return
-    
-
-#%%
-
-
-
-if __name__ == "__main__":
-    
-    regular_features = pd.read_csv("personal/results/public_czech/reg_features_db2.csv", index_col="account_id")
-    # regular_features = pd.read_csv("personal/temp/regular_features.csv", index_col="account_id")
-    
-    data = combine_features_dfs([status, regular_features])
-    
-    
-    
-    check_transforms(data)
-    
-    check_timewindows(data)
-    check_months_lengths(data)
-    
-    
-    
-    # regular_features = pd.read_csv("personal/all_features_db2.csv", index_col="account_id")
-    regular_features = pd.read_csv("personal/temp/regular_features.csv", index_col="account_id")
-
-    data_all = combine_features_dfs([status, regular_features])
-    data_wo_fft = return_without_column_types(regular_features, ["fft"], [3])
-    data_wo_B = return_without_column_types(regular_features, ["B"], [3])
-    
-    B_features = select_features_subset(regular_features, ["B"])
-    data_B = combine_features_dfs([status, B_features])
-    best_lgbm_all = joblib.load("personal/temp/lgbm.joblib")
-    
-    best_lgbm_B = joblib.load("personal/temp/lgbm_b.joblib")
-    
-    
-    
-    
-    # assess_5x2cv(data_all, data_B, best_lgbm_all, best_lgbm_B)
-    
-    assess_McNemar(data_all, data_B, best_lgbm_all, best_lgbm_B)

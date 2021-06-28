@@ -19,6 +19,17 @@ os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 # # data = data[data.account_id == 1843]
 
 #%%
+def get_reduced_data(data, set_of_feats):
+    set_of_feats = [i + 1 for i in set_of_feats]
+    set_of_feats.insert(0,0)
+    return data.iloc[:,set_of_feats]
+
+def count_occurences_features(pd_feat_names):
+    pd_split = pd.Series(pd_feat_names).str.split(" ", expand=True)
+    for col in pd_split.columns:
+        print(pd_split[col].value_counts(), "\n")
+    return
+
 
 def determine_observation_period_yearly(data_date, observation_length):
     """

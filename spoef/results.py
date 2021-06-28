@@ -1,17 +1,13 @@
 import os
 import pandas as pd
-import joblib
-from lightgbm import plot_importance, LGBMClassifier
-
-from probatus.feature_elimination import ShapRFECV
 
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 from spoef.feature_generation import create_all_features
-from spoef.utils import combine_features_dfs, select_features_subset, take_last_year
-from spoef.benchmarking import grid_search_LGBM, grid_search_RF, search_mother_wavelet
+from spoef.utils import combine_features_dfs, take_last_year, get_reduced_data, count_occurences_features
+from spoef.benchmarking import grid_search_LGBM, search_mother_wavelet, gridsearchLGBM, gridsearchRF
 from spoef.transforms import create_all_features_transformed
-from spoef.feature_selection import return_without_column_types, check_transforms, check_balances_transactions, check_feature_types, check_timewindows, check_months_lengths, check_signal_processing_properties, assess_5x2cv
+from spoef.feature_selection import shap_fs, return_without_column_types, assess_5x2cv, assess_McNemar
 
 def write_out_list_dfs(list_dfs, location):
     for item in list_dfs:
@@ -109,186 +105,170 @@ fs_data = combine_features_dfs([status, features_reg, features_norm, features_PC
 def select_non_default_subset(data, n):
     data_def = data[data.status==1]
     data_non_def = data[data.status==0]
-    data_subset_non_def = data_non_def.sample(n=n, random_state=n, axis=0)    
-    data_subset = pd.concat([data_def, data_subset_non_def], axis=0)    
+    data_subset_non_def = data_non_def.sample(n=n, random_state=n, axis=0)
+    data_subset = pd.concat([data_def, data_subset_non_def], axis=0)
     return data_subset
     
 fs_data = select_non_default_subset(fs_data, 100)
 
-# if test:
-#     fs_data.iloc[[1,5,12,7,37],0] = 1
-
-
-#%% FS ON ALL FEATURES
-
-shap, lgbm = check_transforms(fs_data)
-fs_data_1 = return_without_column_types(fs_data, ["PCA", "ICA", "norm"], [0,0,0])
-
-shap_1, lgbm = check_balances_transactions(fs_data_1)
-fs_data_2 = return_without_column_types(fs_data_1, ["tr"], [1])
-
-shap_2, lgbm = check_feature_types(fs_data_2)
-fs_data_3_1 = return_without_column_types(fs_data_2, ["wavelet"], [3])
-
-shap_2, lgbm = check_feature_types(fs_data_3_1)
-fs_data_3_2 = return_without_column_types(fs_data_3_1, ["f2"], [3])
-
-shap_2, lgbm = check_feature_types(fs_data_3_2)
-fs_data_3 = return_without_column_types(fs_data_2, ["fft", "f2", "wavelet"], [3,3,3])
-
-shap_3, lgbm = check_timewindows(fs_data_3)
-fs_data_4 = return_without_column_types(fs_data_3, ["Q"], [2])
-
-fs_data_final = fs_data_4
-
-#%% FS ON B FEATURES
-
-fs_data_B = return_without_column_types(fs_data, ["fft", "f2", "wavelet", "wav_B"], [3,3,3,3])
-
-
-shap, lgbm = check_transforms(fs_data_B)
-
-fs_data_B_1_1 = return_without_column_types(fs_data_B, ["PCA"], [0])
-shap, lgbm = check_transforms(fs_data_B_1_1)
-
-fs_data_B_1_2 = return_without_column_types(fs_data_B_1_1, ["ICA"], [0])
-shap, lgbm = check_transforms(fs_data_B_1_2)
-
-fs_data_B_1 = return_without_column_types(fs_data_B, ["norm", "PCA", "ICA"], [0,0,0])
-
-shap_1, lgbm = check_balances_transactions(fs_data_B_1)
-fs_data_B_2 = return_without_column_types(fs_data_B_1, ["tr"], [1])
-
-shap_3, lgbm = check_timewindows(fs_data_B_2)
-fs_data_B_3 = return_without_column_types(fs_data_B_2, ["Q"], [2])
-
-fs_data_B_final = fs_data_B_3
-
-#%% FS ON SP FEATURES
-
-fs_data_SP = return_without_column_types(fs_data, ["B"], [3,3,3])
-
-
-shap, lgbm = check_transforms(fs_data_SP)
-fs_data_SP_1 = return_without_column_types(fs_data_SP, ["norm", "PCA", "ICA"], [0,0,0])
-
-shap_1, lgbm = check_balances_transactions(fs_data_SP_1)
-fs_data_SP_2 = return_without_column_types(fs_data_SP_1, ["tr"], [1])
-
-shap_2, lgbm = check_feature_types(fs_data_SP_2)
-fs_data_SP_3_int = return_without_column_types(fs_data_SP_2, ["wavelet"], [3])
-
-shap_2, lgbm = check_feature_types(fs_data_SP_3_int)
-fs_data_SP_3_int = return_without_column_types(fs_data_SP_3_int, ["f2"], [3])
-
-shap_2, lgbm = check_feature_types(fs_data_SP_3_int)
-fs_data_SP_3 = return_without_column_types(fs_data_SP_2, ["fft", "f2", "wavelet"], [3,3,3])
-
-shap_3, lgbm = check_timewindows(fs_data_SP_3)
-fs_data_SP_4 = return_without_column_types(fs_data_SP_3, ["Y"], [2,2])
-
-fs_data_SP_final = fs_data_SP_3
-
-
-
-#%% Feature importances
-# 
-X = fs_data_2.iloc[:, 1:]
-
-
-plot_importance(lgbm, max_num_features = 10)
-
-feat_importances = pd.Series(lgbm.feature_importances_, index=X.columns)
-feat_importances.nlargest(20).plot(kind='barh')
-
-
-
-
-
-shap.force_plot(shap_2.expected_value[0], shap_2(X).values[0])
-shap.waterfall_plot(shap_2.base_values[0], shap_2(X).values[0], X[0])
-
-test = shap.force_plot(shap_2.expected_value[0], shap_2(X).values[0])
-
-
-
-
-
-
 
 #%% SHAP
 
-data_SHAP = fs_data
 
-lgbm = LGBMClassifier(
-                    objective="binary",
-                    n_estimators=200,
-                    max_depth=6,
-                    num_leaves=20,
-                    learning_rate=0.1,
-                    random_state=0,
-                    # is_unbalance=True,
-                ) 
-
-shap_elim = ShapRFECV(lgbm, step=0.2, cv=5, scoring='roc_auc', n_jobs=1)
-
-y = data_SHAP.iloc[:, 0].values
-X = data_SHAP.iloc[:, 1:].values
-
-report = shap_elim.fit_compute(X,y, check_additivity=False)
-
-performance_plot = shap_elim.plot()
-
-
-#%%
-set_of_feats = shap_elim.get_reduced_features_set(num_features=8)
-pd_feat_names = pd.Series(data_SHAP.columns[set_of_feats])
-
-def count_occurences_features(pd_feat_names):
-    pd_split = pd_feat_names.str.split(" ", expand=True)
-    for col in pd_split.columns:
-        print(pd_split[col].value_counts(), "\n")
-    return
-
-count_occurences_features(pd_feat_names)
-
-#%%
 
 
 #%%
 
-shap_elimination.get_reduced_features_set(num_features=8)
+#%% Feature Selection
+
+data_all = fs_data
+data_B = return_without_column_types(fs_data, ["fft", "f2", "wavelet", "wav_B"], [3,3,3,3])
+data_SP = return_without_column_types(fs_data, ["B"], [3,3,3])
+
+#%% Feature selection: basic features
+
+# Random Forest: round 1
+shap_elim_B_RF_1 = shap_fs(data_B, 'RF', step=0.2)
+set_of_feats_B_RF_1 = shap_elim_B_RF_1.get_reduced_features_set(num_features=24)
+data_B_RF_1 = get_reduced_data(data_B, set_of_feats_B_RF_1)
+
+# Random Forest: round 2
+shap_elim_B_RF_2 = shap_fs(data_B_RF_1, 'RF', step=0.1)
+set_of_feats_B_RF_2 = shap_elim_B_RF_2.get_reduced_features_set(num_features=9)
+data_B_RF_2 = get_reduced_data(data_B, set_of_feats_B_RF_2)
+
+# LightGBM: round 1
+shap_elim_B_LGBM_1 = shap_fs(data_B, 'LGBM', step=0.2)
+set_of_feats_B_LGBM_1 = shap_elim_B_LGBM_1.get_reduced_features_set(num_features=24)
+data_B_LGBM_1 = get_reduced_data(data_B, set_of_feats_B_LGBM_1)
+
+# LightGBM: round 2
+shap_elim_B_LGBM_2 = shap_fs(data_B_LGBM_1, 'LGBM', step=0.1)
+set_of_feats_B_LGBM_2 = shap_elim_B_LGBM_2.get_reduced_features_set(num_features=13)
+data_B_LGBM_2 = get_reduced_data(data_B, set_of_feats_B_LGBM_2)
+
+count_occurences_features(data_B_RF_2.columns)
+count_occurences_features(data_B_LGBM_2.columns)
+
+
+#%% Feature selection: signal processing features
+
+# Random Forest: round 1
+shap_elim_SP_RF_1 = shap_fs(data_SP, 'RF', step=0.3)
+set_of_feats_SP_RF_1 = shap_elim_SP_RF_1.get_reduced_features_set(num_features=114)
+data_SP_RF_1 = get_reduced_data(data_SP, set_of_feats_SP_RF_1)
+
+# Random Forest: round 2
+shap_elim_SP_RF_2 = shap_fs(data_SP_RF_1, 'RF', step=0.2)
+set_of_feats_SP_RF_2 = shap_elim_SP_RF_2.get_reduced_features_set(num_features=60)
+data_SP_RF_2 = get_reduced_data(data_SP, set_of_feats_SP_RF_2)
+
+# Random Forest: round 3
+shap_elim_SP_RF_3 = shap_fs(data_SP_RF_2, 'RF', step=0.1)
+set_of_feats_SP_RF_3 = shap_elim_SP_RF_3.get_reduced_features_set(num_features=10)
+data_SP_RF_3 = get_reduced_data(data_SP, set_of_feats_SP_RF_3)
+
+# LightGBM: round 1
+shap_elim_SP_LGBM_1 = shap_fs(data_SP, 'LGBM', step=0.3)
+set_of_feats_SP_LGBM_1 = shap_elim_SP_LGBM_1.get_reduced_features_set(num_features=669)
+data_SP_LGBM_1 = get_reduced_data(data_SP, set_of_feats_SP_LGBM_1)
+
+# LightGBM: round 2
+shap_elim_SP_LGBM_2 = shap_fs(data_SP_LGBM_1, 'LGBM', step=0.2)
+set_of_feats_SP_LGBM_2 = shap_elim_SP_LGBM_2.get_reduced_features_set(num_features=39)
+data_SP_LGBM_2 = get_reduced_data(data_SP, set_of_feats_SP_LGBM_2)
+
+# LightGBM: round 3
+shap_elim_SP_LGBM_3 = shap_fs(data_SP_LGBM_2, 'LGBM', step=0.1)
+set_of_feats_SP_LGBM_3 = shap_elim_SP_LGBM_3.get_reduced_features_set(num_features=9)
+data_SP_LGBM_3 = get_reduced_data(data_SP, set_of_feats_SP_LGBM_3)
+
+count_occurences_features(data_SP_RF_3.columns)
+count_occurences_features(data_SP_LGBM_3.columns)
+
+
+#%% Feature selection: all features
+
+# Random Forest: round 1
+shap_elim_all_RF_1 = shap_fs(data_all, 'RF', step=0.3)
+set_of_feats_all_RF_1 = shap_elim_all_RF_1.get_reduced_features_set(num_features=973)
+data_all_RF_1 = get_reduced_data(data_all, set_of_feats_all_RF_1)
+
+# Random Forest: round 2
+shap_elim_all_RF_2 = shap_fs(data_all_RF_1, 'RF', step=0.2)
+set_of_feats_all_RF_2 = shap_elim_all_RF_2.get_reduced_features_set(num_features=44)
+data_all_RF_2 = get_reduced_data(data_all, set_of_feats_all_RF_2)
+
+# Random Forest: round 3
+shap_elim_all_RF_3 = shap_fs(data_all_RF_2, 'RF', step=0.1)
+set_of_feats_all_RF_3 = shap_elim_all_RF_3.get_reduced_features_set(num_features=8)
+data_all_RF_3 = get_reduced_data(data_all, set_of_feats_all_RF_3)
+
+# LightGBM: round 1
+shap_elim_all_LGBM_1 = shap_fs(data_all, 'LGBM', step=0.3)
+set_of_feats_all_LGBM_1 = shap_elim_all_LGBM_1.get_reduced_features_set(num_features=478)
+data_all_LGBM_1 = get_reduced_data(data_all, set_of_feats_all_LGBM_1)
+
+# LightGBM: round 2
+shap_elim_all_LGBM_2 = shap_fs(data_all_LGBM_1, 'LGBM', step=0.2)
+set_of_feats_all_LGBM_2 = shap_elim_all_LGBM_2.get_reduced_features_set(num_features=102)
+data_all_LGBM_2 = get_reduced_data(data_all, set_of_feats_all_LGBM_2)
+
+# LightGBM: round 3
+shap_elim_all_LGBM_3 = shap_fs(data_all_LGBM_2, 'LGBM', step=1)
+set_of_feats_all_LGBM_3 = shap_elim_all_LGBM_3.get_reduced_features_set(num_features=17)
+data_all_LGBM_3 = get_reduced_data(data_all, set_of_feats_all_LGBM_3)
+
+count_occurences_features(data_all_RF_3.columns)
+count_occurences_features(data_all_LGBM_3.columns)
+
 
 #%% Performance comparison
 
-# gridsearch for B, SP, all feature sets
+# LGBM
+fs_data_B_LGBM_final = data_B_LGBM_2
+fs_data_SP_LGBM_final = data_all_LGBM_3
+fs_data_all_LGBM_final = data_SP_LGBM_3
 
-lgbm_B, auc_list, explainer = grid_search_LGBM(fs_data_B_final)
-lgbm_SP, auc_list, explainer = grid_search_LGBM(fs_data_SP_final)
-lgbm, auc_list, explainer = grid_search_LGBM(fs_data_final)
+# gridsearch for LGBM for B, SP, all feature sets
+lgbm_B = gridsearchLGBM(fs_data_B_LGBM_final, cv=2)
+lgbm_SP = gridsearchLGBM(fs_data_SP_LGBM_final, cv=2)
+lgbm_all = gridsearchLGBM(fs_data_all_LGBM_final, cv=2)
 
-assess_5x2cv(fs_data_B_final, fs_data_SP_final, lgbm_B, lgbm_SP)
-assess_5x2cv(fs_data_B_final, fs_data_final, lgbm_B, lgbm)
-assess_5x2cv(fs_data_final, fs_data_SP_final, lgbm, lgbm_SP)
+# performance comparison
+assess_5x2cv(fs_data_B_LGBM_final, fs_data_SP_LGBM_final, lgbm_B, lgbm_SP)
+assess_5x2cv(fs_data_B_LGBM_final, fs_data_all_LGBM_final, lgbm_B, lgbm_all)
+assess_5x2cv(fs_data_all_LGBM_final, fs_data_SP_LGBM_final, lgbm_all, lgbm_SP)
+
+assess_McNemar(fs_data_B_LGBM_final, fs_data_SP_LGBM_final, lgbm_B, lgbm_SP)
+assess_McNemar(fs_data_B_LGBM_final, fs_data_all_LGBM_final, lgbm_B, lgbm_all)
+assess_McNemar(fs_data_all_LGBM_final, fs_data_SP_LGBM_final, lgbm_all, lgbm_SP)
 
 
 
+# Random Forest
+fs_data_B_RF_final = data_B_RF_2
+fs_data_SP_RF_final = data_all_RF_3
+fs_data_all_RF_final = data_SP_RF_3
+
+# gridsearch for RF for B, SP, all feature sets
+RF_B = gridsearchRF(fs_data_B_RF_final, cv=2)
+RF_SP = gridsearchRF(fs_data_SP_RF_final, cv=2)
+RF_all = gridsearchRF(fs_data_all_RF_final, cv=2)
+
+# performance comparison
+assess_5x2cv(fs_data_B_RF_final, fs_data_SP_RF_final, RF_B, RF_SP)
+assess_5x2cv(fs_data_B_RF_final, fs_data_all_RF_final, RF_B, RF_all)
+assess_5x2cv(fs_data_all_RF_final, fs_data_SP_RF_final, RF_all, RF_SP)
+
+assess_McNemar(fs_data_B_RF_final, fs_data_SP_RF_final, RF_B, RF_SP)
+assess_McNemar(fs_data_B_RF_final, fs_data_all_RF_final, RF_B, RF_all)
+assess_McNemar(fs_data_all_RF_final, fs_data_SP_RF_final, RF_all, RF_SP)
 
 
 
 #%% Benchmarking
 # generating only the relevant features
-
-
-
-#%%repeat for Basic features only
-
-B_features = select_features_subset(features_reg, ["B"])
-data_B = combine_features_dfs([status, B_features])
-base_lgbm_B, auc_list = grid_search_LGBM(data_B)      
-# base_RF_B, auc_list = grid_search_RF(data_B)
-joblib.dump(base_lgbm_B, "personal/temp/lgbm_b.joblib")
-
 
 
 
@@ -310,7 +290,9 @@ joblib.dump(base_lgbm_B, "personal/temp/lgbm_b.joblib")
 - benchmark selective feature generation time
 
 
-
+TODO:
+    - logistic regression
+    - 
 
 
 
