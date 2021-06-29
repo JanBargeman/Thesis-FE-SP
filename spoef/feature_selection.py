@@ -38,49 +38,7 @@ os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 #%%
 
-def shap_fs(data, classifier_type, step=0.2, cv=5, scoring='roc_auc', n_iter=5):
-    
-    if classifier_type == 'LGBM':
-        classifier = LGBMClassifier(
-                        objective="binary",
-                        n_estimators=30, # 5000
-                        max_depth=3, # 6
-                        num_leaves=20,
-                        learning_rate=0.1,
-                        random_state=0,
-                        scale_pos_weight=1.0,
-                        # is_unbalance=True,
-                    )
-        
-    elif classifier_type == 'LGBM_cv':
-        parameters = {
-            'n_estimators':[5000, 10000],
-            'max_depth':[6],
-            'num_leaves':[20],
-            'learning_rate':[0.1, 0.3],
-            'max_bin':[63],
-            'min_child_samples':[20],
-            'scale_pos_weight':[1.0, 3.0],
-            }
-        clf = LGBMClassifier(objective='binary')
-        classifier = RandomizedSearchCV(clf, parameters, scoring='roc_auc', n_jobs=1, cv=cv, n_iter=n_iter)
-        
-    elif classifier_type == 'RF':
-        classifier = RandomForestClassifier()
-        
-    elif classifier_type == 'RF_cv':
-        parameters = {
-            'n_estimators':[5000, 10000],
-            'max_depth':[6],
-            }
-        clf = RandomForestClassifier()
-        classifier = RandomizedSearchCV(clf, parameters, scoring='roc_auc', n_jobs=1, cv=cv, n_iter=n_iter)
-        
-    elif classifier_type == 'LR':
-        classifier = LogisticRegression()
-        
-    else:
-        raise ValueError('classifier_type should be one of "LGBM", "RF" or "LR"')
+def shap_fs(data, classifier, step=0.2, cv=5, scoring='roc_auc', n_iter=5):
     
     shap_elim = ShapRFECV(classifier, step=step, cv=cv, scoring=scoring, n_jobs=1)
     
@@ -91,7 +49,6 @@ def shap_fs(data, classifier_type, step=0.2, cv=5, scoring='roc_auc', n_iter=5):
     
     performance_plot = shap_elim.plot()
 
-        
     return shap_elim
 
 def assess_5x2cv(dataset1, dataset2, model1, model2):
@@ -155,10 +112,12 @@ def assess_McNemar(dataset1, dataset2, model1, model2, test_size=0.4):
     if (b+c) < 25:
         if b > c:
             print("The first set performs better.")
-            print("p-value: " + str("%.4f" %scipy.stats.binom.cdf(b, b+c, 0.5)))
+            print("p-value: " + str("%.4f" %scipy.stats.binom.cdf(c, b+c, 0.5)))
+            print(b,c)
         elif b < c:
             print("The second set performs better.")
-            print("p-value: " + str("%.4f" %scipy.stats.binom.cdf(c, b+c, 0.5)))
+            print("p-value: " + str("%.4f" %scipy.stats.binom.cdf(b, b+c, 0.5)))
+            print(b,c)
         else:
             raise ValueError("b==c?")
             
@@ -231,3 +190,9 @@ def perform_5x2cv(data, model):
     # print("Mean (std): " + str(mean) + " (" + str(stdev) + ")")
     
     return mean, stdev
+
+def return_without_column_types(data, string_list, index_list):
+    data = data.copy()
+    for string, index in zip(string_list, index_list):
+        data = data[["status"]+[col for col in data.columns[1:] if not col.split(" ")[index].startswith(string)]]
+    return data

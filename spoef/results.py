@@ -58,7 +58,7 @@ features_reg = pd.read_csv(f"{results_location}/features_reg.csv", index_col="ac
 #%% Grid search for optimal parameters
 data_all = combine_features_dfs([status, features_reg])
 # data_all.iloc[[1,5,12,7,37],0] = 1
-base_lgbm_all, auc_list = grid_search_LGBM(data_all)
+base_lgbm_all = gridsearchLGBM(data_all)
 # joblib.dump(base_lgbm_all, f"{results_location}/base_lgbm_all.joblib")
 
 
@@ -101,7 +101,8 @@ features_ICA = pd.read_csv(f"{results_location}/features_ICA.csv", index_col="ac
 
 fs_data = combine_features_dfs([status, features_reg, features_norm, features_PCA, features_ICA])
 
-#%%
+#%% Select non-default subset
+
 def select_non_default_subset(data, n):
     data_def = data[data.status==1]
     data_non_def = data[data.status==0]
@@ -113,38 +114,47 @@ fs_data = select_non_default_subset(fs_data, 100)
 
 
 #%% SHAP
-
-
-
-
-#%%
-
 #%% Feature Selection
 
 data_all = fs_data
 data_B = return_without_column_types(fs_data, ["fft", "f2", "wavelet", "wav_B"], [3,3,3,3])
-data_SP = return_without_column_types(fs_data, ["B"], [3,3,3])
+data_SP = return_without_column_types(fs_data, ["B"], [3])
+
+
+#%% Grid search 
+cv = 5
+
+B_lgbm = gridsearchLGBM(data_B, cv=cv)
+B_RF = gridsearchRF(data_B, cv=cv)
+
+SP_lgbm_L = gridsearchLGBM(data_SP, cv=cv)
+SP_RF_L = gridsearchRF(data_SP, cv=cv)
+
+all_lgbm_L = gridsearchLGBM(data_all, cv=cv)
+all_RF_L = gridsearchRF(data_all, cv=cv)
+
 
 #%% Feature selection: basic features
 
 # Random Forest: round 1
-shap_elim_B_RF_1 = shap_fs(data_B, 'RF', step=0.2)
+shap_elim_B_RF_1 = shap_fs(data_B, B_RF, step=0.2)
 set_of_feats_B_RF_1 = shap_elim_B_RF_1.get_reduced_features_set(num_features=24)
 data_B_RF_1 = get_reduced_data(data_B, set_of_feats_B_RF_1)
 
 # Random Forest: round 2
-shap_elim_B_RF_2 = shap_fs(data_B_RF_1, 'RF', step=0.1)
-set_of_feats_B_RF_2 = shap_elim_B_RF_2.get_reduced_features_set(num_features=9)
+shap_elim_B_RF_2 = shap_fs(data_B_RF_1, B_RF, step=0.1)
+set_of_feats_B_RF_2 = shap_elim_B_RF_2.get_reduced_features_set(num_features=8)
 data_B_RF_2 = get_reduced_data(data_B, set_of_feats_B_RF_2)
 
+
 # LightGBM: round 1
-shap_elim_B_LGBM_1 = shap_fs(data_B, 'LGBM', step=0.2)
+shap_elim_B_LGBM_1 = shap_fs(data_B, B_lgbm, step=0.2)
 set_of_feats_B_LGBM_1 = shap_elim_B_LGBM_1.get_reduced_features_set(num_features=24)
 data_B_LGBM_1 = get_reduced_data(data_B, set_of_feats_B_LGBM_1)
 
 # LightGBM: round 2
-shap_elim_B_LGBM_2 = shap_fs(data_B_LGBM_1, 'LGBM', step=0.1)
-set_of_feats_B_LGBM_2 = shap_elim_B_LGBM_2.get_reduced_features_set(num_features=13)
+shap_elim_B_LGBM_2 = shap_fs(data_B_LGBM_1, B_lgbm, step=0.1)
+set_of_feats_B_LGBM_2 = shap_elim_B_LGBM_2.get_reduced_features_set(num_features=11)
 data_B_LGBM_2 = get_reduced_data(data_B, set_of_feats_B_LGBM_2)
 
 count_occurences_features(data_B_RF_2.columns)
@@ -154,33 +164,38 @@ count_occurences_features(data_B_LGBM_2.columns)
 #%% Feature selection: signal processing features
 
 # Random Forest: round 1
-shap_elim_SP_RF_1 = shap_fs(data_SP, 'RF', step=0.3)
-set_of_feats_SP_RF_1 = shap_elim_SP_RF_1.get_reduced_features_set(num_features=114)
+shap_elim_SP_RF_1 = shap_fs(data_SP, SP_RF_L, step=0.3)
+set_of_feats_SP_RF_1 = shap_elim_SP_RF_1.get_reduced_features_set(num_features=231)
 data_SP_RF_1 = get_reduced_data(data_SP, set_of_feats_SP_RF_1)
 
 # Random Forest: round 2
-shap_elim_SP_RF_2 = shap_fs(data_SP_RF_1, 'RF', step=0.2)
-set_of_feats_SP_RF_2 = shap_elim_SP_RF_2.get_reduced_features_set(num_features=60)
+shap_elim_SP_RF_2 = shap_fs(data_SP_RF_1, SP_RF_L, step=0.2)
+set_of_feats_SP_RF_2 = shap_elim_SP_RF_2.get_reduced_features_set(num_features=77)
 data_SP_RF_2 = get_reduced_data(data_SP, set_of_feats_SP_RF_2)
 
+SP_RF_s = gridsearchRF(data_SP_RF_2, cv=cv)
+
 # Random Forest: round 3
-shap_elim_SP_RF_3 = shap_fs(data_SP_RF_2, 'RF', step=0.1)
-set_of_feats_SP_RF_3 = shap_elim_SP_RF_3.get_reduced_features_set(num_features=10)
+shap_elim_SP_RF_3 = shap_fs(data_SP_RF_2, SP_RF_s, step=0.1)
+set_of_feats_SP_RF_3 = shap_elim_SP_RF_3.get_reduced_features_set(num_features=19)
 data_SP_RF_3 = get_reduced_data(data_SP, set_of_feats_SP_RF_3)
 
+
 # LightGBM: round 1
-shap_elim_SP_LGBM_1 = shap_fs(data_SP, 'LGBM', step=0.3)
-set_of_feats_SP_LGBM_1 = shap_elim_SP_LGBM_1.get_reduced_features_set(num_features=669)
+shap_elim_SP_LGBM_1 = shap_fs(data_SP, SP_lgbm_L, step=0.3)
+set_of_feats_SP_LGBM_1 = shap_elim_SP_LGBM_1.get_reduced_features_set(num_features=469)
 data_SP_LGBM_1 = get_reduced_data(data_SP, set_of_feats_SP_LGBM_1)
 
 # LightGBM: round 2
-shap_elim_SP_LGBM_2 = shap_fs(data_SP_LGBM_1, 'LGBM', step=0.2)
-set_of_feats_SP_LGBM_2 = shap_elim_SP_LGBM_2.get_reduced_features_set(num_features=39)
+shap_elim_SP_LGBM_2 = shap_fs(data_SP_LGBM_1, SP_lgbm_L, step=0.2)
+set_of_feats_SP_LGBM_2 = shap_elim_SP_LGBM_2.get_reduced_features_set(num_features=42)
 data_SP_LGBM_2 = get_reduced_data(data_SP, set_of_feats_SP_LGBM_2)
 
+SP_lgbm_s = gridsearchLGBM(data_SP_LGBM_2, cv=cv)
+
 # LightGBM: round 3
-shap_elim_SP_LGBM_3 = shap_fs(data_SP_LGBM_2, 'LGBM', step=0.1)
-set_of_feats_SP_LGBM_3 = shap_elim_SP_LGBM_3.get_reduced_features_set(num_features=9)
+shap_elim_SP_LGBM_3 = shap_fs(data_SP_LGBM_2, SP_lgbm_s, step=0.1)
+set_of_feats_SP_LGBM_3 = shap_elim_SP_LGBM_3.get_reduced_features_set(num_features=11)
 data_SP_LGBM_3 = get_reduced_data(data_SP, set_of_feats_SP_LGBM_3)
 
 count_occurences_features(data_SP_RF_3.columns)
@@ -190,32 +205,37 @@ count_occurences_features(data_SP_LGBM_3.columns)
 #%% Feature selection: all features
 
 # Random Forest: round 1
-shap_elim_all_RF_1 = shap_fs(data_all, 'RF', step=0.3)
-set_of_feats_all_RF_1 = shap_elim_all_RF_1.get_reduced_features_set(num_features=973)
+shap_elim_all_RF_1 = shap_fs(data_all, all_RF_L, step=0.3)
+set_of_feats_all_RF_1 = shap_elim_all_RF_1.get_reduced_features_set(num_features=478)
 data_all_RF_1 = get_reduced_data(data_all, set_of_feats_all_RF_1)
 
 # Random Forest: round 2
-shap_elim_all_RF_2 = shap_fs(data_all_RF_1, 'RF', step=0.2)
-set_of_feats_all_RF_2 = shap_elim_all_RF_2.get_reduced_features_set(num_features=44)
+shap_elim_all_RF_2 = shap_fs(data_all_RF_1, all_RF_L, step=0.2)
+set_of_feats_all_RF_2 = shap_elim_all_RF_2.get_reduced_features_set(num_features=53)
 data_all_RF_2 = get_reduced_data(data_all, set_of_feats_all_RF_2)
 
+all_RF_s = gridsearchRF(data_all_RF_2, cv=cv)
+
 # Random Forest: round 3
-shap_elim_all_RF_3 = shap_fs(data_all_RF_2, 'RF', step=0.1)
-set_of_feats_all_RF_3 = shap_elim_all_RF_3.get_reduced_features_set(num_features=8)
+shap_elim_all_RF_3 = shap_fs(data_all_RF_2, all_RF_s, step=0.1)
+set_of_feats_all_RF_3 = shap_elim_all_RF_3.get_reduced_features_set(num_features=12)
 data_all_RF_3 = get_reduced_data(data_all, set_of_feats_all_RF_3)
 
+
 # LightGBM: round 1
-shap_elim_all_LGBM_1 = shap_fs(data_all, 'LGBM', step=0.3)
+shap_elim_all_LGBM_1 = shap_fs(data_all, all_lgbm_L, step=0.3)
 set_of_feats_all_LGBM_1 = shap_elim_all_LGBM_1.get_reduced_features_set(num_features=478)
 data_all_LGBM_1 = get_reduced_data(data_all, set_of_feats_all_LGBM_1)
 
 # LightGBM: round 2
-shap_elim_all_LGBM_2 = shap_fs(data_all_LGBM_1, 'LGBM', step=0.2)
-set_of_feats_all_LGBM_2 = shap_elim_all_LGBM_2.get_reduced_features_set(num_features=102)
+shap_elim_all_LGBM_2 = shap_fs(data_all_LGBM_1, all_lgbm_L, step=0.2)
+set_of_feats_all_LGBM_2 = shap_elim_all_LGBM_2.get_reduced_features_set(num_features=53)
 data_all_LGBM_2 = get_reduced_data(data_all, set_of_feats_all_LGBM_2)
 
+all_lgbm_s = gridsearchLGBM(data_all_LGBM_2, cv=cv)
+
 # LightGBM: round 3
-shap_elim_all_LGBM_3 = shap_fs(data_all_LGBM_2, 'LGBM', step=1)
+shap_elim_all_LGBM_3 = shap_fs(data_all_LGBM_2, all_lgbm_s, step=0.1)
 set_of_feats_all_LGBM_3 = shap_elim_all_LGBM_3.get_reduced_features_set(num_features=17)
 data_all_LGBM_3 = get_reduced_data(data_all, set_of_feats_all_LGBM_3)
 
@@ -223,7 +243,9 @@ count_occurences_features(data_all_RF_3.columns)
 count_occurences_features(data_all_LGBM_3.columns)
 
 
-#%% Performance comparison
+#%% Performance comparison: optimal
+cv = 5
+
 
 # LGBM
 fs_data_B_LGBM_final = data_B_LGBM_2
@@ -231,12 +253,12 @@ fs_data_SP_LGBM_final = data_all_LGBM_3
 fs_data_all_LGBM_final = data_SP_LGBM_3
 
 # gridsearch for LGBM for B, SP, all feature sets
-lgbm_B = gridsearchLGBM(fs_data_B_LGBM_final, cv=2)
-lgbm_SP = gridsearchLGBM(fs_data_SP_LGBM_final, cv=2)
-lgbm_all = gridsearchLGBM(fs_data_all_LGBM_final, cv=2)
+lgbm_B = gridsearchLGBM(fs_data_B_LGBM_final, cv=cv)
+lgbm_SP = gridsearchLGBM(fs_data_SP_LGBM_final, cv=cv)
+lgbm_all = gridsearchLGBM(fs_data_all_LGBM_final, cv=cv)
 
 # performance comparison
-assess_5x2cv(fs_data_B_LGBM_final, fs_data_SP_LGBM_final, lgbm_B, lgbm_SP)
+assess_5x2cv(fs_data_B_LGBM_final, fs_data_SP_LGBM_final, lgbm_B, lgbm_SP) 
 assess_5x2cv(fs_data_B_LGBM_final, fs_data_all_LGBM_final, lgbm_B, lgbm_all)
 assess_5x2cv(fs_data_all_LGBM_final, fs_data_SP_LGBM_final, lgbm_all, lgbm_SP)
 
@@ -252,9 +274,9 @@ fs_data_SP_RF_final = data_all_RF_3
 fs_data_all_RF_final = data_SP_RF_3
 
 # gridsearch for RF for B, SP, all feature sets
-RF_B = gridsearchRF(fs_data_B_RF_final, cv=2)
-RF_SP = gridsearchRF(fs_data_SP_RF_final, cv=2)
-RF_all = gridsearchRF(fs_data_all_RF_final, cv=2)
+RF_B = gridsearchRF(fs_data_B_RF_final, cv=cv)
+RF_SP = gridsearchRF(fs_data_SP_RF_final, cv=cv)
+RF_all = gridsearchRF(fs_data_all_RF_final, cv=cv)
 
 # performance comparison
 assess_5x2cv(fs_data_B_RF_final, fs_data_SP_RF_final, RF_B, RF_SP)
@@ -264,6 +286,55 @@ assess_5x2cv(fs_data_all_RF_final, fs_data_SP_RF_final, RF_all, RF_SP)
 assess_McNemar(fs_data_B_RF_final, fs_data_SP_RF_final, RF_B, RF_SP)
 assess_McNemar(fs_data_B_RF_final, fs_data_all_RF_final, RF_B, RF_all)
 assess_McNemar(fs_data_all_RF_final, fs_data_SP_RF_final, RF_all, RF_SP)
+
+if save:
+    write_out_list_dfs(["fs_data_B_LGBM_final", "fs_data_SP_LGBM_final", "fs_data_all_LGBM_final", "fs_data_B_RF_final", "fs_data_SP_RF_final", "fs_data_all_RF_final"], results_location)
+
+#%% Performance comparison: last X
+    
+cv = 5
+last = 18
+
+# LGBM
+fs_last_data_B_LGBM_final = get_reduced_data(data_B, shap_elim_B_LGBM_2.get_reduced_features_set(num_features=last))
+fs_last_data_SP_LGBM_final = get_reduced_data(data_SP, shap_elim_all_LGBM_3.get_reduced_features_set(num_features=last))
+fs_last_data_all_LGBM_final = get_reduced_data(data_all, shap_elim_SP_LGBM_3.get_reduced_features_set(num_features=last))
+
+# gridsearch for LGBM for B, SP, all feature sets
+lgbm_B = gridsearchLGBM(fs_last_data_B_LGBM_final, cv=cv)
+lgbm_SP = gridsearchLGBM(fs_last_data_SP_LGBM_final, cv=cv)
+lgbm_all = gridsearchLGBM(fs_last_data_all_LGBM_final, cv=cv)
+
+# performance comparison
+assess_5x2cv(fs_last_data_B_LGBM_final, fs_last_data_SP_LGBM_final, lgbm_B, lgbm_SP)
+assess_5x2cv(fs_last_data_B_LGBM_final, fs_last_data_all_LGBM_final, lgbm_B, lgbm_all)
+assess_5x2cv(fs_last_data_all_LGBM_final, fs_last_data_SP_LGBM_final, lgbm_all, lgbm_SP)
+
+assess_McNemar(fs_last_data_B_LGBM_final, fs_last_data_SP_LGBM_final, lgbm_B, lgbm_SP)
+assess_McNemar(fs_last_data_B_LGBM_final, fs_last_data_all_LGBM_final, lgbm_B, lgbm_all)
+assess_McNemar(fs_last_data_all_LGBM_final, fs_last_data_SP_LGBM_final, lgbm_all, lgbm_SP)
+
+
+
+# Random Forest
+fs_last_data_B_RF_final = get_reduced_data(data_B, shap_elim_B_RF_2.get_reduced_features_set(num_features=last))
+fs_last_data_SP_RF_final = get_reduced_data(data_SP, shap_elim_all_RF_3.get_reduced_features_set(num_features=last))
+fs_last_data_all_RF_final = get_reduced_data(data_all, shap_elim_SP_RF_3.get_reduced_features_set(num_features=last))
+
+# gridsearch for RF for B, SP, all feature sets
+RF_B = gridsearchRF(fs_last_data_B_RF_final, cv=cv)
+RF_SP = gridsearchRF(fs_last_data_SP_RF_final, cv=cv)
+RF_all = gridsearchRF(fs_last_data_all_RF_final, cv=cv)
+
+# performance comparison
+assess_5x2cv(fs_last_data_B_RF_final, fs_last_data_SP_RF_final, RF_B, RF_SP)
+assess_5x2cv(fs_last_data_B_RF_final, fs_last_data_all_RF_final, RF_B, RF_all)
+assess_5x2cv(fs_last_data_all_RF_final, fs_last_data_SP_RF_final, RF_all, RF_SP)
+
+assess_McNemar(fs_last_data_B_RF_final, fs_last_data_SP_RF_final, RF_B, RF_SP)
+assess_McNemar(fs_last_data_B_RF_final, fs_last_data_all_RF_final, RF_B, RF_all)
+assess_McNemar(fs_last_data_all_RF_final, fs_last_data_SP_RF_final, RF_all, RF_SP)
+
 
 
 

@@ -20,9 +20,10 @@ os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 #%%
 def get_reduced_data(data, set_of_feats):
-    set_of_feats = [i + 1 for i in set_of_feats]
-    set_of_feats.insert(0,0)
-    return data.iloc[:,set_of_feats]
+    data = data.copy()
+    if 'status' not in set_of_feats:
+        set_of_feats.insert(0,'status')
+    return data.loc[:,set_of_feats]
 
 def count_occurences_features(pd_feat_names):
     pd_split = pd.Series(pd_feat_names).str.split(" ", expand=True)
