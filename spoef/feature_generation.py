@@ -64,8 +64,9 @@ def compute_list_featuretypes(
     
     if type(list_featuretypes) != list:
         raise AttributeError("'list_featuretypes' must be a list.")
-    
-    allowed_components = ["B", "F", "F2", "W", "W_B"]
+        
+    allowed_components = ["Basic", "FourierNLargest", "WaveletComplete", "WaveletBasic", "FourierComplete"]
+
     for argument in list_featuretypes:
         if argument not in allowed_components:
             raise ValueError(f"argument must be one of {allowed_components}")
@@ -75,19 +76,15 @@ def compute_list_featuretypes(
     features_wavelet = pd.DataFrame()
     features_wavelet_basic = pd.DataFrame()
     features_fft2 = pd.DataFrame()
-    if "B" in list_featuretypes:
+    if "Basic" in list_featuretypes:
         features_basic = compute_basic(data)
-        features_basic.columns = [
-            "B " + str(col)
-            for col in features_basic.columns
-        ]
-    if "F" in list_featuretypes:
-        features_fourier = compute_fourier(data, fourier_n_largest_frequencies)
-    if "F2" in list_featuretypes:
-        features_fft2 = compute_fft2(data)
-    if "W" in list_featuretypes:
-        features_wavelet = compute_wavelet(data, wavelet_depth, mother_wavelet)
-    if "W_B" in list_featuretypes:
+    if "FourierNLargest" in list_featuretypes:
+        features_fourier = compute_fourier_n_largest(data, fourier_n_largest_frequencies)
+    if "FourierComplete" in list_featuretypes:
+        features_fft2 = compute_fourier_complete(data)
+    if "WaveletComplete" in list_featuretypes:
+        features_wavelet = compute_wavelet_complete(data, wavelet_depth, mother_wavelet)
+    if "WaveletBasic" in list_featuretypes:
         features_wavelet_basic = compute_wavelet_basic(
             data, wavelet_depth, mother_wavelet
         )
@@ -98,7 +95,39 @@ def compute_list_featuretypes(
     return features
 
 
-def compute_fourier(data, fourier_n_largest_frequencies):
+def compute_basic(data):
+    """
+    This function creates basic features.
+
+    "B" for Basic - min, max, mean, kurt ,skew, std, sum.
+
+    Args:
+        data (pd.DataFrame()) : one column from which to make basic features.
+
+    Returns:
+        features (pd.DataFrame()) : (1 x 7) row of basic features.
+
+    """
+    col_names = ["min", "max", "mean", "skew", "kurt", "std", "sum"]
+    col_names = ["Basic " + str(col) for col in col_names]
+    features = pd.DataFrame(
+        [
+            [
+                data.min(),
+                data.max(),
+                data.mean(),
+                data.skew(),
+                data.kurt(),
+                data.std(),
+                data.sum(),
+            ]
+        ],
+        columns=col_names,
+    )
+    return features
+
+
+def compute_fourier_n_largest(data, fourier_n_largest_frequencies):
     """
     This function takes the Fast Fourier Transform and returns the n largest
     frequencies and their values.
@@ -126,11 +155,11 @@ def compute_fourier(data, fourier_n_largest_frequencies):
     # Name the columns
     features = [*largest_indexes.tolist(), *largest_values]
     col_names_index = [
-        "fft index_" + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
+        "FourierNLargest freq_" + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
         for i in range(int(len(features) / 2))
     ]
     col_names_size = [
-        "fft size_" + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
+        "FourierNLargest ampl_" + str(i + 1) + "/" + str(fourier_n_largest_frequencies)
         for i in range(int(len(features) / 2))
     ]
     col_names = [*col_names_index, *col_names_size]
@@ -139,7 +168,7 @@ def compute_fourier(data, fourier_n_largest_frequencies):
 
 
 
-def compute_fft2(data):
+def compute_fourier_complete(data):
     """
     This function takes the Fast Fourier Transform and returns the n largest
     frequencies and their values.
@@ -156,15 +185,10 @@ def compute_fft2(data):
 
     """
     if (
-        len(data) < 35 and len(data) > 23
-    ):  # due to varying month lengths only first 28 days are used ...
-        data = data[:28]
-
-    if (
         len(data) < 95 and len(data) > 85
     ):  # due to varying quarter lengths only first 88 days are used ...
-        data = data[:88]
-        
+        data = data[:89]
+    
     # Fast Fourier Transform
     fft = scipy.fft.fft(data.values)
     fft_sel = fft[range(int(len(data) / 2))]
@@ -177,11 +201,11 @@ def compute_fft2(data):
     # Name the columns
     features = [*fft_real, *fft_imag]
     col_names_real = [
-        "f2 real_" + str(i + 1) + "/" + str(len(data)/2)
+        "FourierComplete ampl_" + str(i + 1) + "/" + str(len(data)/2)
         for i in range(int(len(features) / 2))
     ]
     col_names_imag = [
-        "f2 imag_" + str(i + 1) + "/" + str(len(data)/2)
+        "FourierComplete phase_" + str(i + 1) + "/" + str(len(data)/2)
         for i in range(int(len(features) / 2))
     ]
     col_names = [*col_names_real, *col_names_imag]
@@ -191,38 +215,8 @@ def compute_fft2(data):
 
 
 
-def compute_basic(data):
-    """
-    This function creates basic features.
 
-    "B" for Basic - min, max, mean, kurt ,skew, std, sum.
-
-    Args:
-        data (pd.DataFrame()) : one column from which to make basic features.
-
-    Returns:
-        features (pd.DataFrame()) : (1 x 7) row of basic features.
-
-    """
-    col_names = ["min", "max", "mean", "skew", "kurt", "std", "sum"]
-    features = pd.DataFrame(
-        [
-            [
-                data.min(),
-                data.max(),
-                data.mean(),
-                data.skew(),
-                data.kurt(),
-                data.std(),
-                data.sum(),
-            ]
-        ],
-        columns=col_names,
-    )
-    return features
-
-
-def compute_wavelet(data, wavelet_depth, mother_wavelet):
+def compute_wavelet_complete(data, wavelet_depth, mother_wavelet):
     """
     This function takes the Wavelet Transform and returns all approximation
     and details coefficients at each depth.
@@ -240,10 +234,6 @@ def compute_wavelet(data, wavelet_depth, mother_wavelet):
         features (pd.DataFrame()) : row of wavelet features.
 
     """
-    if (
-        len(data) < 35 and len(data) > 23
-    ):  # due to varying month lengths only first 28 days are used ...
-        data = data[:28]
 
     if (
         len(data) < 95 and len(data) > 85
@@ -251,17 +241,20 @@ def compute_wavelet(data, wavelet_depth, mother_wavelet):
         data = data[:88]
 
     wavelet = pywt.wavedec(data, wavelet=mother_wavelet, level=wavelet_depth)
+    
     features = [item for sublist in wavelet for item in sublist]  # flatten list
 
-    col_names = ["wavelet depth_" + str(i + 1) for i in range(len(features))]
+    col_names = [f'WaveletComplete depth_{wavelet_depth-sublist[0]}/{wavelet_depth}_item_{i+1}' for sublist in enumerate(wavelet) for i in range(len(sublist[1]))]  # flatten list
+    
     features = pd.DataFrame([features], columns=col_names)
+        
     return features
 
 
 def compute_wavelet_basic(data, wavelet_depth, mother_wavelet):
     """
     This function takes the Wavelet Transform and at each depth makes basic
-    features for the approximation/DETAIL? coefficients.
+    features for the approximation and detail coefficients.
 
     "W_B" for Wavelet Basic - takes "B"/Basic (min, max, etc) at each depth.
 
@@ -282,12 +275,12 @@ def compute_wavelet_basic(data, wavelet_depth, mother_wavelet):
         data_wavelet, coeffs = pywt.dwt(data_wavelet, wavelet=mother_wavelet)
         features_at_depth = compute_basic(pd.Series(data_wavelet))
         features_at_depth.columns = [
-            "wav_B depth_" + str(i + 1) + "_" + str(col)
+            "WaveletBasic_approx depth_" + str(i) + "_" + str(col)
             for col in features_at_depth.columns
         ]
         features_at_depth_high = compute_basic(pd.Series(coeffs))
         features_at_depth_high.columns = [
-            "wav_B_high depth_" + str(i + 1) + " " + str(col)
+            "WaveletBasic_detail depth_" + str(i) + " " + str(col)
             for col in features_at_depth_high.columns
         ]
         features = pd.concat(
@@ -465,7 +458,7 @@ def feature_creation_yearly(
     data,
     grouper,
     combine_fill_method,
-    normalize,
+    normalize=False,
     list_featuretypes=["B"],
     observation_length=1,
     fourier_n_largest_frequencies=30,
@@ -603,7 +596,7 @@ def feature_creation_quarterly(
     data,
     grouper,
     combine_fill_method,
-    normalize,
+    normalize=False,
     list_featuretypes=["B"],
     observation_length=4,
     fourier_n_largest_frequencies=10,

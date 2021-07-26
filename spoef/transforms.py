@@ -18,23 +18,23 @@ from spoef.feature_generation import compute_list_featuretypes
 
 #%% For testing functions
 
-# data = pd.read_csv("personal/data/data.csv")
-# data.date = pd.to_datetime(data.date, format="%y%m%d")
+data = pd.read_csv("personal/data/data.csv")
+data.date = pd.to_datetime(data.date, format="%Y-%m-%d")
 
-# #%% make test data
-# data = data.iloc[0:2000,:]
-# # data_acc = data[data.account_id == 1787]
-# # data_used = data_acc[["date","balance"]]
-# # data = data[data.account_id == 276]
-# # data = data[data.account_id == 1843]
+#%% make test data
+data = data.iloc[0:2000,:]
+# data_acc = data[data.account_id == 1787]
+# data_used = data_acc[["date","balance"]]
+# data = data[data.account_id == 276]
+# data = data[data.account_id == 1843]
 #%%
 
 def create_global_transformer_PCA():
     global transformer 
-    transformer = PCA(n_components=1)
+    transformer = PCA(n_components=2)
 def create_global_transformer_ICA():
     global transformer 
-    transformer = FastICA(n_components=1)
+    transformer = FastICA(n_components=2)
 
 
 def create_all_features_transformed(data, transform_type, list_featuretypes, mother_wavelet="db2"):
@@ -64,8 +64,6 @@ def create_all_features_transformed(data, transform_type, list_featuretypes, mot
         mother_wavelet=mother_wavelet,
     )
 
-
-
     # print("overall:", int(timeit.default_timer() - current), "seconds")  # 533
 
     list_features_dfs = [
@@ -92,7 +90,7 @@ def feature_creation_yearly_transformed(
     list_featuretypes=["B"],
     observation_length=1,
     fourier_n_largest_frequencies=30,
-    wavelet_depth=5,
+    wavelet_depth=6,
     mother_wavelet="db2",
 ):
     features = (
@@ -140,25 +138,27 @@ def compute_features_yearly_transformed(
             (prepared_data.iloc[:, 0] >= start_date + relativedelta(years=year))
             & (prepared_data.iloc[:, 0] < start_date + relativedelta(years=year + 1))
         ]
-        data_transformed = pd.DataFrame(transformer.fit_transform(data_year.iloc[:,[1,2]])).iloc[:,0]
-        yearly_features = compute_list_featuretypes(
-            data_transformed,
-            list_featuretypes,
-            fourier_n_largest_frequencies,
-            wavelet_depth,
-            mother_wavelet,
-        )
-        # name columns
-        yearly_features.columns = [
-            "xf Y_"
-            + str(year + 1)
-            + "/"
-            + str(observation_length)
-            + " "
-            + col
-            for col in yearly_features.columns
-        ]
-        features = pd.concat([features, yearly_features], axis=1)
+        data_transformed = pd.DataFrame(transformer.fit_transform(data_year.iloc[:,[1,2]]))
+        for i in range(2):
+            data_used = data_transformed.iloc[:,i]
+            transformed_features = compute_list_featuretypes(
+                data_used,
+                list_featuretypes,
+                fourier_n_largest_frequencies,
+                wavelet_depth,
+                mother_wavelet,
+            )
+            # name columns
+            transformed_features.columns = [
+                f"{i} Y_"
+                + str(year + 1)
+                + "/"
+                + str(observation_length)
+                + " "
+                + col
+                for col in transformed_features.columns
+            ]
+            features = pd.concat([features, transformed_features], axis=1)
     return features
 
 
@@ -215,29 +215,33 @@ def compute_features_quarterly_transformed(
             (prepared_data.iloc[:, 0] >= start_date + relativedelta(months=3*quarter))
             & (prepared_data.iloc[:, 0] < start_date + relativedelta(months=3*quarter + 3))
         ]
-        data_transformed = pd.DataFrame(transformer.fit_transform(data_quarter.iloc[:,[1,2]])).iloc[:,0]
-        quarterly_features = compute_list_featuretypes(
-            data_transformed,
-            list_featuretypes,
-            fourier_n_largest_frequencies,
-            wavelet_depth,
-            mother_wavelet,
-        )
-        # name columns
-        quarterly_features.columns = [
-            "xf Q_"
-            + str(quarter + 1)
-            + "/"
-            + str(observation_length)
-            + " "
-            + col
-            for col in quarterly_features.columns
-        ]
-        features = pd.concat([features, quarterly_features], axis=1)
+        data_transformed = pd.DataFrame(transformer.fit_transform(data_quarter.iloc[:,[1,2]]))
+        for i in range(2):
+            data_used = data_transformed.iloc[:,i]
+            transformed_features = compute_list_featuretypes(
+                data_used,
+                list_featuretypes,
+                fourier_n_largest_frequencies,
+                wavelet_depth,
+                mother_wavelet,
+            )
+            # name columns
+            transformed_features.columns = [
+                f"{i+1} Q_"
+                + str(quarter + 1)
+                + "/"
+                + str(observation_length)
+                + " "
+                + col
+                for col in transformed_features.columns
+            ]
+            features = pd.concat([features,transformed_features], axis=1)
     return features
-# #%% PCA
 
-# PCA_features = create_all_features_transformed(data, 'PCA', ["B", "F", "W", "W_B"], "db2")
+
+#%% PCA
+
+# PCA_features = create_all_features_transformed(data, 'PCA', ["B", "F", "F2", "W", "W_B"], "db2")
 
 # #%% Writeout PCA_features
 # PCA_features.to_csv("personal/PCA_features.csv")

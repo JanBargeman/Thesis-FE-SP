@@ -19,6 +19,24 @@ os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 # # data = data[data.account_id == 1843]
 
 #%%
+
+def shap_elim_to_reduce(start_data, shap_elim, num_features):
+    set_of_feats = shap_elim.get_reduced_features_set(num_features=num_features)
+    return get_reduced_data(start_data, set_of_feats)
+
+
+
+def select_non_default_subset_data(data, multiplier):
+    data_sel = data[['account_id','status']].drop_duplicates()
+       
+    data_def = data_sel[data_sel.status==1]
+    data_non_def = data_sel[data_sel.status==0]
+    data_subset_non_def = data_non_def.sample(n=multiplier*len(data_def), random_state=multiplier, axis=0)
+    data_subset = pd.concat([data_def, data_subset_non_def], axis=0)
+    data_subset = data_subset.merge(data, on=['account_id', 'status'], how='inner')
+    return data_subset
+
+
 def get_reduced_data(data, set_of_feats):
     data = data.copy()
     if 'status' not in set_of_feats:
