@@ -8,11 +8,11 @@ import numpy as np
 import timeit
 
 
-os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP/spoef")
 
-from spoef.utils import combine_features_dfs
-from spoef.feature_generation import feature_generation
-from spoef.feature_selection import perform_5x2cv
+from utils import combine_features_dfs
+from feature_generation import feature_generation
+from feature_selection import perform_5x2cv
 
 def gridsearchLGBM(data, cv=5, size='s', debug=False):
     Y = data.iloc[:, 0].values

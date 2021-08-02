@@ -3,13 +3,15 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import timeit
 
-os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP/spoef")
 
-from spoef.feature_generation import create_all_features
-from spoef.utils import shap_elim_to_reduce, select_non_default_subset_data, combine_features_dfs, take_last_year, get_reduced_data, count_occurences_features, fill_empty_dates
-from spoef.benchmarking import search_mother_wavelet, gridsearchLGBM, gridsearchRF
-from spoef.transforms import create_all_features_transformed
-from spoef.feature_selection import shap_fs, assess_5x2cv, assess_McNemar, return_with_only_column_types
+from feature_generation import create_all_features
+from utils import preprocess_data, shap_elim_to_reduce, select_non_default_subset_data, combine_features_dfs, take_last_year, get_reduced_data, count_occurences_features, fill_empty_dates
+from benchmarking import search_mother_wavelet, gridsearchLGBM, gridsearchRF
+from transforms import create_all_features_transformed
+from feature_selection import shap_fs, assess_5x2cv, assess_McNemar, return_with_only_column_types
+
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 results_location = "personal/results/public_czech"
 
@@ -24,6 +26,11 @@ def save_shap_elim_plot(shap_elim, name):
     fig = plot.get_figure()
     fig.savefig(f"{results_location}/figures/{name}", dpi=200)
     return
+
+#%% Preprocess raw data
+loan = pd.read_csv("personal/data/loan.txt", delimiter=";")
+trans = pd.read_csv("personal/data/trans.txt", delimiter=";")
+data = preprocess_data(loan,trans)
 
 #%% Read in data
 data = pd.read_csv("personal/data/data.csv")

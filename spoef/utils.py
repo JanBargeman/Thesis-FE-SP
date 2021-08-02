@@ -6,6 +6,22 @@ import os
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 #%%
+def preprocess_data(loan, trans):
+
+    dataset = loan[["account_id", "status"]].merge(
+        trans[["account_id", "date", "type", "amount", "balance"]]
+    )
+    
+    dataset.loc[dataset.type == "VYDAJ", "amount"] = -dataset.loc[
+        dataset.type == "VYDAJ", "amount"
+    ]
+    dataset = dataset.drop(columns=["type"])
+    dataset.date = pd.to_datetime(dataset.date, format="%y%m%d")
+    dataset = dataset[["account_id", "date", "amount", "balance", "status"]]    
+    dataset.columns = ["account_id", "date", "transaction", "balance", "status"]  
+
+    return dataset
+
 
 def shap_elim_to_reduce(start_data, shap_elim, num_features):
     set_of_feats = shap_elim.get_reduced_features_set(num_features=num_features)

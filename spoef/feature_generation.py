@@ -6,9 +6,9 @@ import numpy as np
 import pywt
 import timeit
 import os
-os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP/spoef")
 
-from spoef.utils import (
+from utils import (
     prepare_data_yearly,
     prepare_data_quarterly,
     combine_features_dfs,

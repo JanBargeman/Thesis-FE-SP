@@ -4,29 +4,15 @@ import os
 
 from sklearn.decomposition import PCA, FastICA
 
-os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
+os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP/spoef")
 
-from spoef.utils import (
+from utils import (
     prepare_data_yearly,
     prepare_data_quarterly,
     combine_features_dfs,
 )
-from spoef.feature_generation import compute_list_featuretypes
+from feature_generation import compute_list_featuretypes
 
-
-
-#%% For testing functions
-
-data = pd.read_csv("personal/data/data.csv")
-data.date = pd.to_datetime(data.date, format="%Y-%m-%d")
-
-#%% make test data
-data = data.iloc[0:2000,:]
-# data_acc = data[data.account_id == 1787]
-# data_used = data_acc[["date","balance"]]
-# data = data[data.account_id == 276]
-# data = data[data.account_id == 1843]
-#%%
 
 def create_global_transformer_PCA():
     global transformer 
