@@ -5,19 +5,6 @@ import os
 
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
-
-#%% For testing functions
-
-# data = pd.read_csv("personal/data/data.csv")
-# data.date = pd.to_datetime(data.date, format="%y%m%d")
-
-# #%% make test data
-# data = data.iloc[0:2000,:]
-# data_acc = data[data.account_id == 1787]
-# data_used = data_acc[["date","balance"]]
-# # data = data[data.account_id == 276]
-# # data = data[data.account_id == 1843]
-
 #%%
 
 def shap_elim_to_reduce(start_data, shap_elim, num_features):
@@ -43,11 +30,27 @@ def get_reduced_data(data, set_of_feats):
         set_of_feats.insert(0,'status')
     return data.loc[:,set_of_feats]
 
-def count_occurences_features(pd_feat_names):
-    pd_split = pd.Series(pd_feat_names).str.split(" ", expand=True)
-    for col in pd_split.columns:
-        print(pd_split[col].value_counts(), "\n")
-    return
+# deze
+def count_occurences_features(pd_feat_names, print_head=None):
+    if isinstance(pd_feat_names, pd.DataFrame()):
+        pd_feat_names = pd_feat_names.columns
+    pd_split = pd.Series(pd_feat_names).str.split(" ", expand=True)    
+    col_names = ['transformation', 'transaction/balance/transform', 'time_window', 'feature_type', 'detail 1', 'detail 2']    
+    dataframe = pd.DataFrame()
+    
+    for i in range(len(pd_split.columns)):
+        count = pd_split[pd_split.columns[i]].value_counts()
+        count = count.reset_index()
+        count = count.iloc[:,0] + ": " + count.iloc[:,1].astype(str)
+        count.name = col_names[i]           
+        dataframe = pd.concat([dataframe,count],axis=1)
+    
+    if print_head != None:    
+        pd.set_option('display.max_columns', None)
+        print(dataframe.head(print_head))
+        pd.reset_option('display.max_columns')
+
+    return dataframe
 
 
 def determine_observation_period_yearly(data_date, observation_length):
@@ -199,29 +202,6 @@ def prepare_data_yearly(data, fill_combine_method, observation_length):
 
 
 
-def count_na(list_of_dfs):
-    """
-    PERSONAL FUNCTION, not part of open source (possible unit test):
-    This function counts the amount of NaN's in a list of dataframes. This is
-    useful for check if feature creation malfunctions.
-
-    Args:
-        list_of_dfs (list of pd.DataFrames()) : dataframes to count NaN's in
-
-    Returns:
-        None
-
-    """
-    na_list = []
-    for df in list_of_dfs:
-        na_list.append(df.isna().sum().sum())
-    if sum(na_list) != 0:
-        print("\nNo success:\n\n", na_list)
-    else:
-        print("\nSuccess\n")
-    return
-
-
 def combine_features_dfs(list_of_dfs):
     """
     This function merges a list of dataframes into one large dataframe.
@@ -248,65 +228,6 @@ def combine_features_dfs(list_of_dfs):
     return combined_dfs
 
 
-def select_features_subset(data, list_subset):
-    """
-    This function allows users to test different subsets of features against
-    each other. By comparing for example the basic ["B"] features subset with the
-    the basic and fourier ["B", "F"] features subset, one can see the added
-    value of the fourier features.
-
-    list_subset:
-        "B" for Basic - min, max, mean, kurt ,skew, std.
-        "F" for Fourier - n largest frequencies and their values.
-        "W" for Wavelet - all approximation and details coefficients at each depth.
-        "W_B" for Wavelet Basic - "B"/Basic (min, max, etc) at each depth.
-
-    Args:
-        data (pd.DataFrame()) : dataframe with all features
-        list_subset (list of str) : list with desired subset of features
-
-    Returns:
-        data_subset (pd.DataFrame()) : dataframe with subset of featuers
-
-    """
-    data_B = pd.DataFrame()
-    data_F = pd.DataFrame()
-    data_W = pd.DataFrame()
-    data_W_B = pd.DataFrame()
-    data_tr = pd.DataFrame()
-    data_ba = pd.DataFrame()
-    list_subset_dfs = []
-
-    if "B" in list_subset:
-        data_B = data[
-            [
-                col
-                for col in data.columns
-                if ("fft" not in col and "wavelet" not in col and "wav_B" not in col)
-            ]
-        ]
-        list_subset_dfs.append(data_B)
-    if "F" in list_subset:
-        data_F = data[[col for col in data.columns if "fft" in col]]
-        list_subset_dfs.append(data_F)
-    if "W" in list_subset:
-        data_W = data[[col for col in data.columns if "wavelet" in col]]
-        list_subset_dfs.append(data_W)
-    if "W_B" in list_subset:
-        data_W_B = data[[col for col in data.columns if "wav_B" in col]]
-        list_subset_dfs.append(data_W_B)
-    if "tr" in list_subset:
-        data_tr = data[[col for col in data.columns if "tr" in col]]
-        list_subset_dfs.append(data_tr)
-    if "ba" in list_subset:
-        data_ba = data[[col for col in data.columns if "ba" in col]]
-        list_subset_dfs.append(data_ba)
-
-    data_subset = combine_features_dfs(list_subset_dfs)
-    if len(data_subset) == 0:
-        raise ValueError("Please pick from types of features")
-
-    return data_subset
 
 
 def write_out_list_dfs(list_names, list_dfs, location):

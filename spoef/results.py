@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 import matplotlib.pyplot as plt
+import timeit
 
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
@@ -8,7 +9,7 @@ from spoef.feature_generation import create_all_features
 from spoef.utils import shap_elim_to_reduce, select_non_default_subset_data, combine_features_dfs, take_last_year, get_reduced_data, count_occurences_features, fill_empty_dates
 from spoef.benchmarking import search_mother_wavelet, gridsearchLGBM, gridsearchRF
 from spoef.transforms import create_all_features_transformed
-from spoef.feature_selection import shap_fs, return_without_column_types, assess_5x2cv, assess_McNemar, return_with_only_column_types
+from spoef.feature_selection import shap_fs, assess_5x2cv, assess_McNemar, return_with_only_column_types
 
 results_location = "personal/results/public_czech"
 
@@ -31,54 +32,56 @@ status = data[["account_id", "status"]].drop_duplicates().set_index("account_id"
 
 save = False
 
-#%% Grab last year
+#%% 3.3 & 4.1.1 - Preprocessing
+# 4.1.1 - Grab last year
 data = data.groupby('account_id', as_index=False).apply(take_last_year).reset_index(drop=True)
-# Grab all defaults and equal amount of non-defaults
+# 3.3 - Grab all defaults and equal amount of non-defaults
 data = select_non_default_subset_data(data, 1)
 
 
-#%% Find optimal mother wavelet
+#%% 5.1.2 - Find optimal mother wavelet
 list_mother_wavelets_various = ["db2", "db4", "coif2", "sym3"]
 mother_wavelets_performance_various = search_mother_wavelet(
     data, status, list_mother_wavelets_various
-)
-# ['0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)']
+) # ['0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)']
 
 list_mother_wavelets_debauchies = ["db3", "db5", "db6", "db10"]  
 mother_wavelets_performance_debauchies = search_mother_wavelet(
     data, status, list_mother_wavelets_debauchies
-)
-# ['0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)']
+) # ['0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)', '0.8667 (0.028981)']
 
-#%% Generate all features
+
+#%% 5.1.1 - Generate all features
 list_featuretypes = ["Basic", "FourierComplete", "FourierNLargest", "WaveletComplete", "WaveletBasic"]
 mother_wavelet = "db2"
 
+
+current = timeit.default_timer() 
 features_reg = create_all_features(data, list_featuretypes, mother_wavelet, normalize=False)
+print("Regular:", int(timeit.default_timer() - current), "seconds") # 66 s
 features_norm = create_all_features(data, list_featuretypes, mother_wavelet, normalize=True)
 features_PCA = create_all_features_transformed(data, 'PCA', list_featuretypes, mother_wavelet)
 features_ICA = create_all_features_transformed(data, 'ICA', list_featuretypes, mother_wavelet)
+print("All:", int(timeit.default_timer() - current), "seconds") # 270 s
 
 if save:
     write_out_list_dfs(["features_reg", "features_norm", "features_PCA", "features_ICA"], results_location)  
 
-
-#%% Read in data
+#%% 5.1.1 - Read in data
 features_reg = pd.read_csv(f"{results_location}/features_reg.csv", index_col="account_id")
 features_norm = pd.read_csv(f"{results_location}/features_norm.csv", index_col="account_id")
 features_PCA = pd.read_csv(f"{results_location}/features_PCA.csv", index_col="account_id")
 features_ICA = pd.read_csv(f"{results_location}/features_ICA.csv", index_col="account_id")
 
-#%% Feature Selection
 
+#%% 5.1.3 Feature Selection
 feature_selection_data = combine_features_dfs([status, features_reg, features_norm, features_PCA, features_ICA])
 
 Basic_set = return_with_only_column_types(feature_selection_data, ["reg", "Basic"], [0,3])
 Regular_set = return_with_only_column_types(feature_selection_data, ["reg"], [0])
 All_set = feature_selection_data
 
-
-#%% Grid search 
+#%% 5.1.3 - Grid search 
 cv = 5
 
 B_lgbm = gridsearchLGBM(Basic_set, cv=cv)
@@ -90,11 +93,7 @@ Reg_RF_L = gridsearchRF(Regular_set, cv=cv)
 all_lgbm_L = gridsearchLGBM(All_set, cv=cv)
 all_RF_L = gridsearchRF(All_set, cv=cv)
 
-
-#%%
-
-#%% Feature selection: Basic set
-
+#%% 5.1.3 - Feature selection: Basic set
 # Random Forest: round 1
 shap_elim_B_RF_1 = shap_fs(Basic_set, B_RF, step=0.2)
 Basic_set_RF_1 = shap_elim_to_reduce(Basic_set, shap_elim_B_RF_1, 24)
@@ -115,9 +114,7 @@ Basic_set_LGBM_2 = shap_elim_to_reduce(Basic_set_LGBM_1, shap_elim_B_LGBM_2, 8)
 count_occurences_features(Basic_set_RF_2.columns)
 count_occurences_features(Basic_set_LGBM_2.columns)
 
-
-#%% Feature selection: Regular set
-
+#%% 5.1.3 - Feature selection: Regular set
 # Random Forest: round 1
 shap_elim_Reg_RF_1 = shap_fs(Regular_set, Reg_RF_L, step=0.3)
 Regular_set_RF_1 = shap_elim_to_reduce(Regular_set, shap_elim_Reg_RF_1, 229)
@@ -152,10 +149,7 @@ Regular_set_LGBM_3 = shap_elim_to_reduce(Regular_set_LGBM_2, shap_elim_Reg_LGBM_
 count_occurences_features(Regular_set_RF_3.columns)
 count_occurences_features(Regular_set_LGBM_3.columns)
 
-
-
-#%% Feature selection: All set
-
+#%% 5.1.3 - Feature selection: All set
 # Random Forest: round 1
 shap_elim_all_RF_1 = shap_fs(All_set, all_RF_L, step=0.3)
 All_set_RF_1 = shap_elim_to_reduce(All_set, shap_elim_all_RF_1, 446)
@@ -189,7 +183,7 @@ count_occurences_features(All_set_RF_3.columns)
 count_occurences_features(All_set_LGBM_3.columns)
 
 
-#%% Performance comparison: optimal
+#%% 5.1.4 - Performance comparison: optimal
 cv = 5
 color_b = '#363636'
 color_reg = '#ff7f0e'
@@ -202,9 +196,9 @@ fs_Regular_set_LGBM_final = All_set_LGBM_3
 fs_All_set_LGBM_final = Regular_set_LGBM_3
 
 # gridsearch for LGBM for B, Reg, all feature sets
-lgbm_B = gridsearchLGBM(fs_Basic_set_LGBM_final, cv=cv)
-lgbm_Reg = gridsearchLGBM(fs_Regular_set_LGBM_final, cv=cv)
-lgbm_all = gridsearchLGBM(fs_All_set_LGBM_final, cv=cv)
+lgbm_B = gridsearchLGBM(fs_Basic_set_LGBM_final, cv=cv) # 0.0103
+lgbm_Reg = gridsearchLGBM(fs_Regular_set_LGBM_final, cv=cv) # 0.0125
+lgbm_all = gridsearchLGBM(fs_All_set_LGBM_final, cv=cv) # 0.009
 
 # performance comparison
 assess_5x2cv(fs_Basic_set_LGBM_final, fs_Regular_set_LGBM_final, lgbm_B, lgbm_Reg, results_location, 'lgbm_b_Reg_opt', color_b, color_reg)
@@ -223,9 +217,9 @@ fs_Regular_set_RF_final = All_set_RF_3
 fs_All_set_RF_final = Regular_set_RF_3
 
 # gridsearch for RF for B, Reg, all feature sets
-RF_B = gridsearchRF(fs_Basic_set_RF_final, cv=cv)
-RF_Reg = gridsearchRF(fs_Regular_set_RF_final, cv=cv)
-RF_all = gridsearchRF(fs_All_set_RF_final, cv=cv)
+RF_B = gridsearchRF(fs_Basic_set_RF_final, cv=cv) # 6.270
+RF_Reg = gridsearchRF(fs_Regular_set_RF_final, cv=cv) # 6.095
+RF_all = gridsearchRF(fs_All_set_RF_final, cv=cv) # 6.313
 
 # performance comparison
 assess_5x2cv(fs_Basic_set_RF_final, fs_Regular_set_RF_final, RF_B, RF_Reg)
@@ -239,7 +233,7 @@ assess_McNemar(fs_All_set_RF_final, fs_Regular_set_RF_final, RF_all, RF_Reg)
 if save:
     write_out_list_dfs(["fs_Basic_set_LGBM_final", "fs_Regular_set_LGBM_final", "fs_All_set_LGBM_final", "fs_Basic_set_RF_final", "fs_Regular_set_RF_final", "fs_All_set_RF_final"], results_location)
 
-#%% Performance comparison: last X
+#%% 5.1.4 - Performance comparison: last 15
     
 cv = 5
 last = 15
@@ -288,7 +282,7 @@ if save:
     write_out_list_dfs(["fs_last_Basic_set_LGBM_final", "fs_last_Regular_set_LGBM_final", "fs_last_All_set_LGBM_final", "fs_last_Basic_set_RF_final", "fs_last_Regular_set_RF_final", "fs_last_All_set_RF_final"], results_location)
 
 
-#%% Finding the final sets of features names
+#%% Appendix 1 - Finding the final sets of features names
 
 pd.Series(fs_Basic_set_LGBM_final.columns).sort_values()
 pd.Series(fs_Regular_set_LGBM_final.columns).sort_values()
@@ -298,12 +292,16 @@ pd.Series(fs_Basic_set_RF_final.columns).sort_values()
 pd.Series(fs_Regular_set_RF_final.columns).sort_values()
 pd.Series(fs_All_set_RF_final.columns).sort_values()
 
-#%% Benchmarking
-# generating only the relevant features
+#%% 5.1.5 - Benchmarking
 
+# How long does it take to generate the "Basic set" features?
+current = timeit.default_timer()   
+Basic_features = create_all_features(data,["Basic"])
+print("Basic:", int(timeit.default_timer() - current), "seconds") # 34s
 
+# For Regular and All set generation times, see 5.1.1
 
- 
+# For model training times, see 5.1.4
 
 
 
@@ -313,7 +311,7 @@ pd.Series(fs_All_set_RF_final.columns).sort_values()
 
 #%% FIGURES
 
-#%% Averaged yearly fourier transactions and balances
+#%% 4.2.1 - Averaged yearly fourier transactions and balances
     
 blue_color = '#2279b5'
  
@@ -332,7 +330,7 @@ plt.plot(data_f2_ba, color=blue_color)
 plt.savefig(f"{results_location}/figures/yearly_fourier_balances",dpi=200)
 plt.show()
 
-#%% Performance comparison plot: optimal
+#%% 5.1.4 - Performance comparison plot: optimal
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -374,7 +372,7 @@ autolabel(rects3)
 plt.savefig(f"{results_location}/figures/performance_comp_optimal",dpi=200)
 plt.show()
 
-#%% Performance comparison plot: last 15
+#%% 5.1.4 - Performance comparison plot: last 15
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -416,7 +414,7 @@ autolabel(rects3)
 plt.savefig(f"{results_location}/figures/performance_comp_last_15",dpi=200)
 plt.show()
 
-#%% One client transactions
+#%% 3.1 - One client transactions
 data_one_client = data[data.account_id == 1787]
 data_one_client_tr = fill_empty_dates(data_one_client[['date', 'transaction']], 'transaction', data_one_client.date.iloc[0], data_one_client.date.iloc[-1])
 plt.plot(data_one_client_tr.transaction, color=blue_color)
@@ -425,7 +423,7 @@ plt.ylabel('Transaction (euro)')
 plt.gcf().subplots_adjust(left=0.17)
 plt.savefig(f"{results_location}/figures/data_transactions",dpi=200)
 plt.show()
-#%% One client balances
+#%% 3.1 - One client balances
 data_one_client_ba = fill_empty_dates(data_one_client[['date', 'balance']], 'balance', data_one_client.date.iloc[0], data_one_client.date.iloc[-1])
 plt.plot(data_one_client_ba.balance, color=blue_color)
 plt.xlabel('Time (days)')

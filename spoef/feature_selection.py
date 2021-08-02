@@ -16,23 +16,6 @@ from numpy.random import seed
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
 
-
-
-# #%% For testing functions
-
-# data = pd.read_csv("personal/data/data.csv")
-# data.date = pd.to_datetime(data.date, format="%Y-%m-%d")
-# status = data[["account_id", "status"]].drop_duplicates().set_index("account_id")
-
-
-# #%% make test data
-# data = data.iloc[0:2000,:]
-# # data_acc = data[data.account_id == 1787]
-# # data_used = data_acc[["date","balance"]]
-# # data = data[data.account_id == 276]
-# # data = data[data.account_id == 1843]
-
-
 #%%
 
 def shap_fs(data, classifier, step=0.2, cv=5, scoring='roc_auc', n_iter=5):
@@ -42,10 +25,8 @@ def shap_fs(data, classifier, step=0.2, cv=5, scoring='roc_auc', n_iter=5):
     y = data.iloc[:, 0]
     X = data.iloc[:, 1:]
     
-    report = shap_elim.fit_compute(X,y, check_additivity=False)
+    shap_elim.fit_compute(X,y, check_additivity=False)
     
-    performance_plot = shap_elim.plot()
-
     return shap_elim
 
 def assess_5x2cv(dataset1, dataset2, model1, model2, results_location=None, filename=None, color1='#ff7f0e', color2='#2279b5'):

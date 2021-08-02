@@ -5,11 +5,13 @@ from lightgbm import LGBMClassifier
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+import timeit
+
 
 os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 
-from spoef.utils import combine_features_dfs, count_na
-from spoef.feature_generation import feature_creation_yearly
+from spoef.utils import combine_features_dfs
+from spoef.feature_generation import feature_generation
 from spoef.feature_selection import perform_5x2cv
 
 def gridsearchLGBM(data, cv=5, size='s', debug=False):
@@ -86,9 +88,10 @@ def gridsearchLGBM(data, cv=5, size='s', debug=False):
                                             X_train, X_valid = X[train_index], X[test_index]
                                             y_train, y_valid = Y[train_index], Y[test_index]              
                                             
-                    
+                                            current = timeit.default_timer()   
                                             lgbm.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_valid, y_valid)], eval_metric="AUC", verbose=False, early_stopping_rounds=30)
-                                            
+                                            train_time = timeit.default_timer() - current
+                                        
                                             current_params = [n_est, max_depth, num_leaves, learn_rate, scale_pos_weight, reg_alpha, reg_lambda]
                                             test_score = roc_auc_score(
                                                 y_valid, lgbm.predict_proba(X_valid)[:,1]
@@ -112,10 +115,12 @@ def gridsearchLGBM(data, cv=5, size='s', debug=False):
                                             base_params = current_params
                                             base_conf_matrix = current_conf_matrix
                                             base_LGBM = lgbm
+                                            base_train_time = train_time
 
     print('\nMean training score:', np.mean(mean_train_scores))
     print('Mean validation score:', np.mean(mean_test_scores))
     print('Best parameters:', base_params)
+    print('Best train time:', base_train_time)
     
     if debug:
         print("\n\nMax AUC: " + str(max_auc) + " at " + str(base_params) + "\n")
@@ -143,13 +148,15 @@ def gridsearchRF(data, cv=3, debug=False):
         }
     rf = RandomForestClassifier(n_jobs=1)
     clf = GridSearchCV(rf, parameters, scoring='roc_auc', n_jobs=1, cv=cv, return_train_score=True)
-    clf.fit(X,y)
     
+    current = timeit.default_timer()   
+    clf.fit(X,y)
+    train_time = timeit.default_timer() - current
+  
     print('Mean training score:', np.mean(clf.cv_results_.get('mean_train_score')))
     print('Mean validation score:', np.mean(clf.cv_results_.get('mean_test_score')))
     print('Best parameters:', clf.best_params_)
-
-
+    print('Best train time:', train_time)
     
     if debug:        
         plt.hist(clf.cv_results_.get('mean_train_score'), bins=50)
@@ -182,18 +189,20 @@ def create_yearly_features_mother(data, list_featuretypes, mother_wavelet):
 
     """
 
-    transaction_features_yearly = feature_creation_yearly(
+    transaction_features_yearly = feature_generation(
         data[["account_id", "date", "transaction"]],
         "account_id",
         "transaction",
         list_featuretypes,
+        time_window='year',
         mother_wavelet=mother_wavelet,
     )
-    balance_features_yearly = feature_creation_yearly(
+    balance_features_yearly = feature_generation(
         data[["account_id", "date", "balance"]],
         "account_id",
         "balance",
         list_featuretypes,
+        time_window='year',
         mother_wavelet=mother_wavelet,
     )
 
@@ -201,7 +210,6 @@ def create_yearly_features_mother(data, list_featuretypes, mother_wavelet):
         transaction_features_yearly,
         balance_features_yearly,
     ]
-    count_na(list_features_dfs)
 
     all_features = combine_features_dfs(list_features_dfs)
 

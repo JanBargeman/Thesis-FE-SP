@@ -9,7 +9,6 @@ os.chdir("/Users/Jan/Desktop/Thesis/Thesis-FE-SP")
 from spoef.utils import (
     prepare_data_yearly,
     prepare_data_quarterly,
-    count_na,
     combine_features_dfs,
 )
 from spoef.feature_generation import compute_list_featuretypes
@@ -70,7 +69,6 @@ def create_all_features_transformed(data, transform_type, list_featuretypes, mot
         transaction_features_quarterly,
         transaction_features_yearly,
     ]
-    count_na(list_features_dfs)
 
     all_features = combine_features_dfs(list_features_dfs)
     
