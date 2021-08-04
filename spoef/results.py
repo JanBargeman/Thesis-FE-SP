@@ -199,13 +199,13 @@ color_all = '#2279b5'
 
 # LGBM
 fs_Basic_set_LGBM_final = Basic_set_LGBM_2
-fs_Regular_set_LGBM_final = All_set_LGBM_3
-fs_All_set_LGBM_final = Regular_set_LGBM_3
+fs_Regular_set_LGBM_final = Regular_set_LGBM_3
+fs_All_set_LGBM_final = All_set_LGBM_3
 
 # gridsearch for LGBM for B, Reg, all feature sets
-lgbm_B = gridsearchLGBM(fs_Basic_set_LGBM_final, cv=cv) # 0.0103
-lgbm_Reg = gridsearchLGBM(fs_Regular_set_LGBM_final, cv=cv) # 0.0125
-lgbm_all = gridsearchLGBM(fs_All_set_LGBM_final, cv=cv) # 0.009
+lgbm_B = gridsearchLGBM(fs_Basic_set_LGBM_final, cv=cv) # 0.0078
+lgbm_Reg = gridsearchLGBM(fs_Regular_set_LGBM_final, cv=cv) # 0.0111
+lgbm_all = gridsearchLGBM(fs_All_set_LGBM_final, cv=cv) # 0.0083
 
 # performance comparison
 assess_5x2cv(fs_Basic_set_LGBM_final, fs_Regular_set_LGBM_final, lgbm_B, lgbm_Reg, results_location, 'lgbm_b_Reg_opt', color_b, color_reg)
@@ -220,13 +220,13 @@ assess_McNemar(fs_All_set_LGBM_final, fs_Regular_set_LGBM_final, lgbm_all, lgbm_
 
 # Random Forest
 fs_Basic_set_RF_final = Basic_set_RF_2
-fs_Regular_set_RF_final = All_set_RF_3
-fs_All_set_RF_final = Regular_set_RF_3
+fs_Regular_set_RF_final = Regular_set_RF_3
+fs_All_set_RF_final = All_set_RF_3
 
 # gridsearch for RF for B, Reg, all feature sets
-RF_B = gridsearchRF(fs_Basic_set_RF_final, cv=cv) # 6.270
-RF_Reg = gridsearchRF(fs_Regular_set_RF_final, cv=cv) # 6.095
-RF_all = gridsearchRF(fs_All_set_RF_final, cv=cv) # 6.313
+RF_B = gridsearchRF(fs_Basic_set_RF_final, cv=cv) # 5.702
+RF_Reg = gridsearchRF(fs_Regular_set_RF_final, cv=cv) # 5.645
+RF_all = gridsearchRF(fs_All_set_RF_final, cv=cv) # 5.562
 
 # performance comparison
 assess_5x2cv(fs_Basic_set_RF_final, fs_Regular_set_RF_final, RF_B, RF_Reg)
@@ -351,14 +351,14 @@ ax = fig.add_subplot(111)
 plt.ylim(0,100)
 # plt.title('AUC comparison for optimal feature sets with 95% confidence interval')
 
-Basic_vals = [69, 71, 91, 89]
-Basic_errs = [2, 2, 5.4, 2.6]
+Basic_vals = [69, 71, 89, 91]
+Basic_errs = [2, 2, 1.1, 1.8]
 rects1 = ax.bar(ind, Basic_vals, width, color='#363636', alpha=0.6, yerr=Basic_errs, capsize=7)
-SP_vals = [80, 73, 98, 94]
-SP_errs = [2.2, 0.8, 1.8, 2.8]
-rects2 = ax.bar(ind+width, SP_vals, width, color='#ff7f0e', alpha=0.8, yerr=SP_errs, capsize=7)
-All_vals = [79, 73, 96, 94]
-All_errs = [2, 1.2, 2.1, 3.7]
+Reg_vals = [79, 73, 95, 96]
+Reg_errs = [2, 1.2, 1.8, 0.8]
+rects2 = ax.bar(ind+width, Reg_vals, width, color='#ff7f0e', alpha=0.8, yerr=Reg_errs, capsize=7)
+All_vals = [80, 73, 97, 96]
+All_errs = [2.2, 0.8, 1.0, 0.4]
 rects3 = ax.bar(ind+width*2, All_vals, width, color='#2279b5', alpha=0.8, yerr=All_errs, capsize=7)
 
 ax.set_ylabel('AUC')
@@ -393,14 +393,14 @@ ax = fig.add_subplot(111)
 plt.ylim(0,100)
 # plt.title('AUC comparison for last-15-features sets with 95% confidence interval')
 
-Basic_vals = [71, 71, 91, 89]
-Basic_errs = [0.8, 1.4, 4.2, 3.7]
+Basic_vals = [71, 71, 85, 91]
+Basic_errs = [0.8, 1.4, 1.6, 1.9]
 rects1 = ax.bar(ind, Basic_vals, width, color='#363636', alpha=0.6, yerr=Basic_errs, capsize=7)
-SP_vals = [75, 73, 98, 93]
-SP_errs = [1.3, 0.7, 0.9, 3.3]
-rects2 = ax.bar(ind+width, SP_vals, width, color='#ff7f0e', alpha=0.8, yerr=SP_errs, capsize=7)
-All_vals = [75, 74, 97, 94]
-All_errs = [1.5, 1.6, 1.4, 3.4]
+Reg_vals = [75, 74, 97, 96]
+Reg_errs = [1.5, 1.6, 1.6, 0.8]
+rects2 = ax.bar(ind+width, Reg_vals, width, color='#ff7f0e', alpha=0.8, yerr=Reg_errs, capsize=7)
+All_vals = [75, 73, 97, 96]
+All_errs = [1.3, 0.7, 1.1, 0.4]
 rects3 = ax.bar(ind+width*2, All_vals, width, color='#2279b5', alpha=0.8, yerr=All_errs, capsize=7)
 
 ax.set_ylabel('AUC')

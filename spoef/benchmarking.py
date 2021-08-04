@@ -28,7 +28,7 @@ def gridsearchLGBM(data, cv=5, size='s', debug=False):
     list_num_leaves = [20] #3, 6 
     list_learn_rate = [0.1] #0.05
     list_min_child_samples = [20] #40
-    list_scale_pos_weight = [1.0, 2.0]
+    list_scale_pos_weight = [1.0]
     
     list_reg_alpha = [0, 20]
     list_reg_lambda = [0, 50]
